@@ -1,0 +1,19 @@
+{
+  "packageName": "Tholz SmartHeat",
+  "author": "Ricardo Nogueira Garcia (based on VH/TRATO)",
+  "version": "1.7",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-19",
+  "documentationLink": "https://github.com/rngarcia/hubitat-tholz-smartheat#readme",
+  "communityLink": "https://github.com/rngarcia/hubitat-tholz-smartheat/issues",
+  "releaseNotes": "v1.7: setHeatMode no longer forces the solar pump on (on:true); solar energy counted from heat0.on.",
+  "drivers": [
+    {
+      "id": "6f1d2c1e-4a7b-4c5e-9a3f-2b8d7e1c0a71",
+      "name": "Tholz SmartHeat",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat-tholz-smartheat/main/hubitat_Tholz_SmartHeat.groovy",
+      "required": true
+    }
+  ]
+}

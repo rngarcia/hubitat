@@ -1,106 +1,156 @@
-/*
- * Tholz SmartHeat — Hubitat Driver (TCP)
- * Versão: 1.3 — Build: 2025-11-16
- * Base: VH / TRATO | Ajustes: RNG/ChatGPT
- * - Conexão via rawSocket (porta 4000)
- * - getDevice / setDevice
- * - Child devices para outputs
- * - Heatings (heat0) com publicação de atributos
- * - temperature prioriza t3 (tempConsumo), depois t2, t1, senão maior tN disponível
- * - Modos válidos: Off (0), Ligado (1), Automático (2), Econômico (3)
+/**
+ *  Tholz SmartHeat — Hubitat Driver (TCP)
+ *  Versão: 1.7 — Build: 2026-10-19
+ *  Autor original: VH / TRATO
+ *  Modificado por: Ricardo Nogueira Garcia
+ *
+ *  Changelog:
+ *  v1.7 (2026-10-19) - RNG
+ *    - Fix setHeatMode: não envia mais on:true junto com o opMode. O campo "on" do
+ *      heat0 é o acionamento da bomba solar; mandar on:true forçava a bomba ligada
+ *      (cortada só pelo F17 após 360 min), inclusive à noite, a cada troca de Mode.
+ *      Agora envia só opMode (e on:false apenas no modo Off).
+ *    - Energia do Apoio Solar passa a ser contada pelo heat0.on (bomba de fato
+ *      ligada), não mais por opMode==1 — o solar fica sempre em Automático.
+ *      Demais apoios seguem por opMode.
+ *    - importUrl no metadata (atualização pelo botão "Import" do Hubitat)
+ *
+ *  v1.6 (2026-10-16) - RNG
+ *    - Fix guard de igualdade nos child devices de energia: Generic Component Switch
+ *      não declara power/energy, então cd.currentValue() sempre retornava null e
+ *      todo frame recebido gerava eventos power/energy repetidos (flood no Maker API).
+ *      Último valor publicado agora fica em cache no state do pai.
+ *    - Log "Conectado." após connect bem-sucedido
+ *    - Removido prefixo duplicado "Tholz TCP: Tholz TCP:" no log de conexão
+ *
+ *  v1.5 (2026-06-22) - RNG
+ *    - Removido statusHtml completamente (pesado no Maker API)
+ *    - Guards de igualdade em publishAllEnergyAttrs() — só emite se valor mudou
+ *    - Throttle de temperatura — só emite se delta > 0.5°C vs último valor
+ *    - Fix bug intervalo de refresh: refreshLoop agora sempre lê settings diretamente
+ *    - state.refreshInterval removido (causava ignorar novo valor das preferências)
+ *    - publishAllEnergyAttrs() só chamado quando estado do apoio muda ou em refresh
+ *      periódico com guard de igualdade
+ *
+ *  v1.4 (2026-06-04) - RNG
+ *    - Monitoramento de consumo energético por apoio
+ *    - Child devices dos apoios com power e energy
+ *    - Comandos resetApoioEnergy
+ *
+ *  v1.3 (2025-11-16) - RNG/ChatGPT
+ *    - Conexão via rawSocket (porta 4000)
  */
 
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import groovy.transform.Field
 
-@Field static final String DRIVER_VERSION    = "1.3"
-@Field static final String DRIVER_BUILD_DATE = "2025-11-16"
+@Field static final String DRIVER_VERSION    = "1.7"
+@Field static final String DRIVER_BUILD_DATE = "2026-10-19"
 @Field static final List<String> HEAT_MODE_OPTIONS = ['Off','Ligado','Automático','Econômico']
 
 metadata {
-    definition(name: "Tholz SmartHeat", namespace: "rng", author: "RNG/ChatGPT") {
+    definition(name: "Tholz SmartHeat", namespace: "rng", author: "VH/TRATO; Ricardo Nogueira Garcia",
+               importUrl: "https://raw.githubusercontent.com/rngarcia/hubitat-tholz-smartheat/main/hubitat_Tholz_SmartHeat.groovy") {
         capability "Initialize"
         capability "Refresh"
         capability "Sensor"
         capability "PushableButton"
         capability "Actuator"
 
-        // Comandos utilitários
         command "reconnect"
-        // command "getDevice"
-
-        // --- Heatings (comandos) ---
         command "heatOn"
         command "heatOff"
-        command "setHeatMode", [[name:"mode*", type:"ENUM", constraints:["Off","Ligado","Automático","Econômico"]]]
+        command "setHeatMode",   [[name:"mode*", type:"ENUM", constraints:["Off","Ligado","Automático","Econômico"]]]
         command "setHeatSetpoint", [[name:"sp(°C)*", type:"NUMBER"]]
         command "heatUp1C"
         command "heatDown1C"
         command "toggleHeatMode"
         command "showDriverInfo"
-        command "renderStatus"      // gera/atualiza o atributo HTML de status
 
-        // --- Controles dedicados (dropdown) para cada função mapeada em heat0..heat3 ---
-        command "setApoioSolar",              [[name:"estado*", type:"ENUM", constraints:["Ligado","Desligado"]]]
-        command "setApoioGas",                [[name:"estado*", type:"ENUM", constraints:["Ligado","Desligado"]]]
-        command "setApoioEletrico",           [[name:"estado*", type:"ENUM", constraints:["Ligado","Desligado"]]]
-        command "setRecirculacaoBarrilete",   [[name:"estado*", type:"ENUM", constraints:["Ligado","Desligado"]]]
+        command "setApoioSolar",            [[name:"estado*", type:"ENUM", constraints:["Ligado","Desligado"]]]
+        command "setApoioGas",              [[name:"estado*", type:"ENUM", constraints:["Ligado","Desligado"]]]
+        command "setApoioEletrico",         [[name:"estado*", type:"ENUM", constraints:["Ligado","Desligado"]]]
+        command "setRecirculacaoBarrilete", [[name:"estado*", type:"ENUM", constraints:["Ligado","Desligado"]]]
 
-        // --- Heatings (atributos no PAI) ---
-        attribute "heat0Mode", "string"
-        attribute "heat0On", "string"
-        attribute "heat0Setpoint", "number"
+        command "resetApoioSolarEnergy"
+        command "resetApoioGasEnergy"
+        command "resetApoioEletricoEnergy"
+        command "resetRecirculacaoBarrileteEnergy"
 
-        // --- Estados das funções mapeadas por canal ---
-        attribute "apoioSolar", "string"              // via heat0.opMode (1=on,0=off)
-        attribute "apoioGas", "string"                // via heat1.opMode
-        attribute "apoioEletrico", "string"           // via heat2.opMode
-        attribute "recirculacaoBarrilete", "string"   // via heat3.opMode
+        attribute "heat0Mode",    "string"
+        attribute "heat0On",      "string"
+        attribute "heat0Setpoint","number"
 
-        // Lista de modos suportados (exposta para Rule Machine / apps)
-        attribute "supportedHeatModes", "string"   // JSON string com a lista
+        attribute "apoioSolar",             "string"
+        attribute "apoioGas",               "string"
+        attribute "apoioEletrico",          "string"
+        attribute "recirculacaoBarrilete",  "string"
 
-        // Renomeações solicitadas
-        attribute "tempColetor", "number"        // t1
-        attribute "tempReservatorio", "number"   // t2
-        attribute "tempConsumo", "number"        // t3
-        attribute "temperature", "number"        // principal (prioriza t3)
+        attribute "apoioSolarPower",             "number"
+        attribute "apoioSolarEnergy",            "number"
+        attribute "apoioGasPower",               "number"
+        attribute "apoioGasEnergy",              "number"
+        attribute "apoioEletricoPower",          "number"
+        attribute "apoioEletricoEnergy",         "number"
+        attribute "recirculacaoBarriletePower",  "number"
+        attribute "recirculacaoBarrileteEnergy", "number"
+
+        attribute "supportedHeatModes", "string"
+
+        attribute "tempColetor",      "number"
+        attribute "tempReservatorio", "number"
+        attribute "tempConsumo",      "number"
+        attribute "temperature",      "number"
         attribute "tempRecirculacao", "number"
-        
-        // --- Info do equipamento ---
-        attribute "deviceId", "number"
-        attribute "fwMain",   "string"
-        attribute "fwSec",    "string"
 
-       // --- Tela de status (HTML para tile "Attribute") ---
-       attribute "statusHtml", "string"
-
-        // --- Info do driver ---
-       attribute "driverVersion", "string"
-       attribute "driverBuildDate", "string"
-
+        attribute "deviceId",       "number"
+        attribute "fwMain",         "string"
+        attribute "fwSec",          "string"
+        attribute "driverVersion",  "string"
+        attribute "driverBuildDate","string"
     }
 
     preferences {
-        input name: "device_IP_address", type: "string", title: "IP do dispositivo Tholz", required: true
-        input name: "device_port", type: "number", title: "Porta TCP", defaultValue: 4000, range: "1..65535", required: true
-        input name: "autoRefreshSecs", type: "number", title: "Atualizar a cada (s)", defaultValue: 15, range: "5..3600"
-        input name: "logEnable", type: "bool", title: "Habilitar debug logging", defaultValue: true
-        input name: "statusAutoUpdate", type: "bool", title: "Atualizar tela de status a cada Refresh", defaultValue: true
+        input name: "device_IP_address", type: "string",  title: "IP do dispositivo Tholz", required: true
+        input name: "device_port",       type: "number",  title: "Porta TCP", defaultValue: 4000, range: "1..65535", required: true
+        input name: "autoRefreshSecs",   type: "number",  title: "Atualizar a cada (s)", defaultValue: 300, range: "5..3600"
+        input name: "logEnable",         type: "bool",    title: "Habilitar debug logging", defaultValue: false
+        input name: "tempThreshold",     type: "decimal", title: "Threshold temperatura (°C) — só emite se delta > valor", defaultValue: 0.5
+
+        input name: "sectionEnergy", type: "paragraph", element: "paragraph",
+              title: "<b>Potência dos Apoios (para cálculo de consumo)</b>",
+              description: "Informe a potência nominal de cada apoio."
+
+        input name: "powerApoioSolar",    type: "number", title: "Potência — Apoio Solar (W)",        defaultValue: 0,    range: "0..50000"
+        input name: "powerApoioGas",      type: "number", title: "Potência — Apoio a Gás (W)",        defaultValue: 0,    range: "0..50000"
+        input name: "powerApoioEletrico", type: "number", title: "Potência — Apoio Elétrico (W)",     defaultValue: 3000, range: "0..50000"
+        input name: "powerRecirculacao",  type: "number", title: "Potência — Recirculação (W)",       defaultValue: 0,    range: "0..50000"
     }
 }
 
+// ── Mapa de apoios de energia ─────────────────────────────────────────────────
+@Field static final List APOIOS_ENERGY_MAP = [
+    [stateKey:"solar",        attrOn:"apoioSolar",            attrPwr:"apoioSolarPower",            attrEng:"apoioSolarEnergy",            prefPwr:"powerApoioSolar",    childSuffix:"apoio-solar"],
+    [stateKey:"gas",          attrOn:"apoioGas",              attrPwr:"apoioGasPower",              attrEng:"apoioGasEnergy",              prefPwr:"powerApoioGas",      childSuffix:"apoio-gas"],
+    [stateKey:"eletrico",     attrOn:"apoioEletrico",         attrPwr:"apoioEletricoPower",         attrEng:"apoioEletricoEnergy",         prefPwr:"powerApoioEletrico", childSuffix:"apoio-eletrico"],
+    [stateKey:"recirculacao", attrOn:"recirculacaoBarrilete", attrPwr:"recirculacaoBarriletePower", attrEng:"recirculacaoBarrileteEnergy", prefPwr:"powerRecirculacao",  childSuffix:"recirculacao-barrilete"]
+]
+
+@Field Map OP_MODE_LABELS_DEFAULT = [0:"Off", 1:"Ligado", 2:"Automático", 3:"Econômico"]
+
+// ── Lifecycle ─────────────────────────────────────────────────────────────────
 def installed() {
-    logInfo "Installed — Tholz SmartHeat v${DRIVER_VERSION} (build ${DRIVER_BUILD_DATE})"
+    logInfo "Installed v${DRIVER_VERSION}"
     sendEvent(name:"numberOfButtons", value:20)
     sendDriverInfo()
     publishSupportedHeatModes()
-    renderStatus()
+    ["apoioSolar","apoioGas","apoioEletrico","recirculacaoBarrilete"].each { sendEvent(name:it, value:"off") }
+    initEnergyState()
 }
 
 def updated() {
-    logInfo "Updated — Tholz SmartHeat v${DRIVER_VERSION} (build ${DRIVER_BUILD_DATE})"
+    logInfo "Updated v${DRIVER_VERSION}"
     sendEvent(name:"numberOfButtons", value:20)
     unschedule()
     state.remove("rxBuf")
@@ -110,46 +160,33 @@ def updated() {
 }
 
 def initialize() {
-    logInfo "Initializing — Tholz SmartHeat v${DRIVER_VERSION} (build ${DRIVER_BUILD_DATE})"
+    logInfo "Initializing v${DRIVER_VERSION}"
     sendDriverInfo()
     connectSocket()
     scheduleRefresh()
-    renderStatus()
-}
-
-def scheduleRefresh() {
-    Integer s = (settings?.autoRefreshSecs ?: 15) as Integer
-    if (s < 5) s = 5
-
-    // guarda o intervalo em state pra reaproveitar
-    state.refreshInterval = s
-
-    // cancela só o loop antigo
-    unschedule("refreshLoop")
-
-    // primeiro disparo rápido
-    runIn(2, "refreshLoop")
-
-    if (logEnable) log.info "Agendado refreshLoop a cada ${s} segundos."
-}
-
-// loop de refresh periódico
-def refreshLoop() {
-    try {
-        refresh()
-    } catch (e) {
-        logWarn "Erro em refreshLoop: ${e}"
+    ["apoioSolar","apoioGas","apoioEletrico","recirculacaoBarrilete"].each {
+        if (device.currentValue(it) == null) sendEvent(name:it, value:"off")
     }
+    initEnergyState()
+}
 
-    Integer s = (state?.refreshInterval ?: (settings?.autoRefreshSecs ?: 15)) as Integer
+// ── Scheduling ────────────────────────────────────────────────────────────────
+def scheduleRefresh() {
+    unschedule("refreshLoop")
+    runIn(2, "refreshLoop")
+    logInfo "Agendado refreshLoop a cada ${autoRefreshSecs ?: 300} segundos."
+}
+
+def refreshLoop() {
+    try { refresh() } catch (e) { logWarn "Erro em refreshLoop: ${e}" }
+    // Sempre lê settings diretamente — evita bug de state antigo ignorar novo valor
+    Integer s = (settings?.autoRefreshSecs ?: 300) as Integer
     if (s < 5) s = 5
-
     runIn(s, "refreshLoop")
 }
 
-
 def reconnect() {
-    logWarn "Reconnecting by user request..."
+    logWarn "Reconnecting..."
     interfaces?.rawSocket?.close()
     runIn(2, "connectSocket")
 }
@@ -157,340 +194,57 @@ def reconnect() {
 def showDriverInfo() { sendDriverInfo() }
 
 private void connectSocket() {
-  try {
-    logInfo "Conectando em ${device_IP_address}:${device_port} ..."
-    interfaces.rawSocket.connect(device_IP_address, (int) device_port)
-    state.lastRxAt = now()
-  } catch (e) {
-    logWarn "Falha ao conectar: ${e.message}"
-    runIn(10, "connectSocket")
-  }
+    try {
+        logInfo "Conectando em ${device_IP_address}:${device_port} ..."
+        interfaces.rawSocket.connect(device_IP_address, (int) device_port)
+        state.lastRxAt = now()
+        logInfo "Conectado."
+    } catch (e) {
+        logWarn "Falha ao conectar: ${e.message}"
+        runIn(10, "connectSocket")
+    }
 }
 
 def uninstalled() {
     try { interfaces?.rawSocket?.close() } catch (ex) {}
 }
 
-def refresh() {
-    getDevice()
-    if (settings?.statusAutoUpdate) {
-    // dá um pequeno tempo pro getDevice responder; em seguida renderiza
-        runIn(1, "renderStatus")
-    }
-}
+def refresh() { getDevice() }
 
-def getDevice() {
-    sendJson([command: "getDevice"])
-}
+def getDevice() { sendJson([command: "getDevice"]) }
 
+// ── Push ──────────────────────────────────────────────────────────────────────
 def push(pushed) {
     if (pushed == null) return
     logInfo "Push ${pushed}"
     sendEvent(name:"pushed", value: pushed, isStateChange: true)
-
     switch (pushed) {
-        case "3":  heatOn();                    break
-        case "4":  heatOff();                   break
-        case "5":  heatUp1C();                  break
-        case "6":  heatDown1C();                break
-        case "13": setHeatMode("Automático");   break
-        case "14": setHeatMode("Ligado");       break
-        case "15": setHeatMode("Off");          break
-        case "18": toggleHeatMode();            break
-        case "19": setOutputById(12, true);     break
-        case "20": setOutputById(12, false);    break
-        default:
-            logWarn "Push ${pushed}: botão não mapeado"
+        case "3":  heatOn();                  break
+        case "4":  heatOff();                 break
+        case "5":  heatUp1C();                break
+        case "6":  heatDown1C();              break
+        case "13": setHeatMode("Automático"); break
+        case "14": setHeatMode("Ligado");     break
+        case "15": setHeatMode("Off");        break
+        case "18": toggleHeatMode();          break
+        case "19": setOutputById(12, true);   break
+        case "20": setOutputById(12, false);  break
+        default: logWarn "Push ${pushed}: botão não mapeado"
     }
 }
 
-// === Toggle entre Automático e Ligado ===
 def toggleHeatMode() {
     String cur = device.currentValue("heat0Mode") ?: "Off"
     String next = cur.equalsIgnoreCase("Automático") ? "Ligado" : "Automático"
-    logInfo "toggleHeatMode: alternando de ${cur} para ${next}"
     setHeatMode(next)
 }
 
-// Publica a lista de modos suportados como JSON string (p/ Rule Machine enxergar via atributo)
 private void publishSupportedHeatModes() {
-    try {
-        String json = JsonOutput.toJson(HEAT_MODE_OPTIONS)
-        sendEvent(name: "supportedHeatModes", value: json, descriptionText: "Modos de aquecimento suportados atualizados")
-    } catch (e) {
-        logWarn "Falha ao publicar supportedHeatModes: ${e}"
-    }
-    }
-
-// ======== Escrita ========
-
-private void sendDriverInfo() {
-    sendEvent(name:"driverVersion", value: DRIVER_VERSION)
-    sendEvent(name:"driverBuildDate", value: DRIVER_BUILD_DATE)
-    if (logEnable) log.debug "Driver info -> version=${DRIVER_VERSION}, build=${DRIVER_BUILD_DATE}"
+    try { sendEvent(name:"supportedHeatModes", value: groovy.json.JsonOutput.toJson(HEAT_MODE_OPTIONS)) }
+    catch (e) { logWarn "Falha ao publicar supportedHeatModes: ${e}" }
 }
 
-private void setOutputById(Integer targetId, Boolean onVal) {
-    Map last = state?.lastDevice ?: [:]
-    Map outs = (last?.outputs ?: [:]) as Map
-
-    Map argOutputs = [:]
-
-    // 3.1) Se já conhecemos a key pelo snapshot anterior, usa
-    outs?.each { k, v ->
-        if (v instanceof Map && v.id == targetId) {
-            argOutputs[k as String] = [on: onVal]
-        }
-    }
-
-    // 3.2) Senão, tenta o chute padrão de key
-    if (argOutputs.isEmpty()) {
-        String guessKey = guessOutputKeyForId(targetId, outs)
-        if (guessKey) {
-            argOutputs[guessKey] = [on: onVal]
-        }
-    }
-
-    // 3.3) Se ainda estiver vazio (porque nem outs veio), manda por ids clássicos
-    if (argOutputs.isEmpty()) {
-        // chutes seguros por convenção: out1->id=1 (Apoio Elétrico), out3->id=3 (Recirculação)
-        String key = (targetId == 1) ? "out1" : (targetId == 3 ? "out3" : null)
-        if (key) {
-            argOutputs[key] = [on: onVal]
-        } else {
-            logWarn "Não foi possível mapear saída id=${targetId} (sem snapshot de outputs)."
-        }
-    }
-
-    if (argOutputs.isEmpty()) {
-        logWarn "Não foi possível montar payload para saída id=${targetId}."
-        return
-    }
-
-    sendJson([command: "setDevice", argument: [outputs: argOutputs]])
-}
-
-
-private String guessOutputKeyForId(Integer idVal, Map outs) {
-    String key = outs?.find { it?.value instanceof Map && it?.value?.id == idVal }?.key
-    if (key) return key as String
-    // palpites comuns
-    if (idVal == 1)  return "out1"          // Apoio Elétrico
-    if (idVal == 3)  return "out3"          // Recirculação
-    if (idVal == 0)  return "out0"
-    if (idVal == 10) return "out1"
-    if (idVal == 11) return "out2"
-    return null
-}
-
-// ======== Envio baixo nível ========
-
-private void sendJson(Map obj) {
-    String js = JsonOutput.toJson(obj)
-    String payload = js + "\n"
-    if (logEnable) log.debug "TX: ${js}"
-    try {
-        interfaces.rawSocket.sendMessage(payload)
-    } catch (e) {
-        logWarn "Falha ao envio (${e}); tentando reconectar..."
-        reconnect()
-    }
-}
-
-// ======== Socket callbacks ========
-
-def parse(String description) {
-    if (logEnable) log.debug "RX (String): ${description}"
-
-    String chunk
-    if (looksLikeHex(description)) {
-        try {
-            chunk = hexToUtf8(description)
-        } catch (e) {
-            log.warn "Falha ao decodificar HEX -> UTF8: ${e}"
-            return
-        }
-    } else {
-        chunk = description
-    }
-
-    state.rxBuf = (state.rxBuf ?: "") + (chunk ?: "")
-    processBuffer()
-}
-
-// void parse(List<Map> description) { ... }  // (mantido, se existir no seu base)
-
-private boolean looksLikeHex(String s) {
-    if (!s) return false
-    return (s ==~ /[0-9A-Fa-f]+/) && (s.length() % 2 == 0)
-}
-
-private String hexToUtf8(String hex) {
-    byte[] bytes = new byte[hex.length() / 2]
-    for (int i = 0; i < hex.length(); i += 2) {
-        bytes[i/2] = (byte) Integer.parseInt(hex.substring(i, i+2), 16)
-    }
-    return new String(bytes, "UTF-8")
-}
-
-private void processBuffer() {
-    String buf = state.rxBuf ?: ""
-    if (!buf) return
-
-    int level = 0
-    int start = -1
-    List<String> frames = []
-    for (int i=0; i<buf.length(); i++) {
-        char c = buf.charAt(i)
-        if (c == '{') {
-            if (level == 0) start = i
-            level++
-        } else if (c == '}') {
-            level--
-            if (level == 0 && start >= 0) {
-                frames << buf.substring(start, i+1)
-                start = -1
-            }
-        }
-    }
-    if (level == 0) {
-        state.rxBuf = ""
-    } else {
-        state.rxBuf = (start >= 0 ? buf.substring(start) : buf)
-    }
-
-    frames.each { f -> handleJsonFrame(f) }
-}
-
-private void handleJsonFrame(String jsonText) {
-    if (logEnable) log.debug "JSON frame: ${jsonText}"
-    def slurper = new JsonSlurper()
-    Map obj
-    try {
-        obj = (Map) slurper.parseText(jsonText)
-    } catch (e) {
-        logWarn "Falha ao parsear JSON: ${e}"
-        return
-    }
-    if (!obj) return
-
-    if (obj.command && obj.response instanceof Map) {
-        Map resp = (Map) obj.response
-        state.lastDevice = resp
-        updateFromResponse(resp)
-        return
-    }
-
-	if (obj.id || obj.outputs || obj.heatings) {
-        state.lastDevice = obj
-        updateFromResponse(obj)
-        return
-    }
-}
-
-private void updateFromResponse(Map resp) {
-    // --------- Device Info (top-level) ----------
-    if (resp?.id != null)        sendEvent(name: "deviceId", value: (resp.id as Long))
-    if (resp?.firmware)          sendEvent(name: "fwMain",   value: resp.firmware as String)
-    if (resp?.firmwareSec)       sendEvent(name: "fwSec",    value: resp.firmwareSec as String)
-
-// --------- Saídas (só atualiza se vierem no payload) ----------
-Map outs = (resp.outputs ?: [:]) as Map
-if (outs) {
-    outs.each { key, node ->
-        if (!(node instanceof Map)) return
-        Integer idVal = (node.id ?: -1) as Integer
-        Boolean isOn  = (node.on == true)
-
-        // child opcional (mantém se você já usa)
-        String dni = "${device.id}-${key}"
-        def cd = getChildDevice(dni)
-        if (!cd) {
-            String nice = nameForOutputId(idVal) ?: "Output ${idVal}"
-            cd = addChildDevice("hubitat", "Generic Component Switch", dni,
-                [label: "${device.displayName} - ${nice}", isComponent: true, componentName: key, componentLabel: nice])
-            cd.updateSetting("txtEnable",[value:"true", type:"bool"])
-            cd.updateDataValue("outputKey", key)
-            cd.updateDataValue("outputId", "${idVal}")
-        }
-        componentUpdate(cd, isOn ? "on" : "off")
-    }
-
-    // guarda snapshot pro mapeamento futuro
-    state.lastDevice = (state.lastDevice ?: [:]) + [outputs: outs]
-}
-
-// --------- Heatings ----------
-Map heats = (resp.heatings ?: [:]) as Map
-Map heat0 = heats?.heat0 as Map
-if (heat0) { publishHeat0(heat0) }
-
-// heat3.t4 -> tempRecirculacao (se já adicionamos antes)
-Map heat3 = heats?.heat3 as Map
-if (heat3?.t4 != null) {
-    BigDecimal tRecirc = cFromRaw(heat3.t4)
-    if (tRecirc != null) sendEvent(name:"tempRecirculacao", value:tRecirc, unit:"°C")
-}
-
-// --------- Estados por função (opMode: 1=Ligado / 0=Desligado) ----------
-Integer h0op = (heat0?.opMode instanceof Number) ? (heat0.opMode as Integer) : null
-Integer h1op = (heats?.heat1?.opMode instanceof Number) ? (heats.heat1.opMode as Integer) : null
-Integer h2op = (heats?.heat2?.opMode instanceof Number) ? (heats.heat2.opMode as Integer) : null
-Integer h3op = (heats?.heat3?.opMode instanceof Number) ? (heats.heat3.opMode as Integer) : null
-if (h0op != null) sendEvent(name:"apoioSolar",            value: (h0op == 1 ? "on" : "off"))
-if (h1op != null) sendEvent(name:"apoioGas",              value: (h1op == 1 ? "on" : "off"))
-if (h2op != null) sendEvent(name:"apoioEletrico",         value: (h2op == 1 ? "on" : "off"))
-if (h3op != null) sendEvent(name:"recirculacaoBarrilete", value: (h3op == 1 ? "on" : "off"))
-}
-
-private String nameForOutputId(Integer idVal) {
-    switch (idVal) {
-        case 0: return "Filtro"
-        case 1: return "Apoio Elétrico"
-        case 2: return "Apoio a Gás"
-        case 3: return "Recirculação"
-        case 4: return "Borbulhador"
-        case 5: return "Circulação"
-    }
-    if (idVal >= 10 && idVal <= 19) return "Auxiliar ${(idVal-9)}"
-    if (idVal >= 20 && idVal <= 29) return "Cascata ${(idVal-19)}"
-    if (idVal >= 30 && idVal <= 39) return "Hidro ${(idVal-29)}"
-    if (idVal >= 40 && idVal <= 59) return "Interruptor ${(idVal-39)}"
-    return null
-}
-
-// ======== Component handlers (child -> parent) ========
-
-def componentOn(cd) {
-    String outKey = cd.getDataValue("outputKey")
-    if (outKey) {
-        sendJson([command:"setDevice", argument:[outputs:[(outKey):[on:true]]]])
-        runIn(1, "getDevice")
-    }
-}
-
-def componentOff(cd) {
-    String outKey = cd.getDataValue("outputKey")
-    if (outKey) {
-        sendJson([command:"setDevice", argument:[outputs:[(outKey):[on:false]]]])
-        runIn(1, "getDevice")
-    }
-}
-
-private void componentUpdate(cd, String ev) {
-    try {
-        cd.parse([[name:"switch", value:ev, descriptionText:"${cd.displayName} was turned ${ev}"]])
-    } catch (ignored) {
-        if (ev == "on") cd.sendEvent(name:"switch", value:"on") else cd.sendEvent(name:"switch", value:"off")
-    }
-}
-
-// ======== Heatings - comandos ========
-
-def heatOn()  { setHeatingOnOff(true)  }
-def heatOff() { setHeatingOnOff(false) }
-
-// ======== Comandos dropdown para as funções dedicadas ========
+// ── Comandos de apoio ─────────────────────────────────────────────────────────
 def setApoioSolar(String estado)            { setHeatOpModeByChannel(0, mapLigadoDesligado(estado)) }
 def setApoioGas(String estado)              { setHeatOpModeByChannel(1, mapLigadoDesligado(estado)) }
 def setApoioEletrico(String estado)         { setHeatOpModeByChannel(2, mapLigadoDesligado(estado)) }
@@ -498,8 +252,8 @@ def setRecirculacaoBarrilete(String estado) { setHeatOpModeByChannel(3, mapLigad
 
 private Integer mapLigadoDesligado(String s) {
     String x = (s ?: "").trim().toLowerCase()
-    if (x in ["ligado","on","1","true"])  return 1
-    if (x in ["desligado","off","0","false"]) return 0
+    if (x in ["ligado","on","1","true"])       return 1
+    if (x in ["desligado","off","0","false"])  return 0
     logWarn "Valor inválido para estado='${s}', assumindo Desligado(0)"
     return 0
 }
@@ -507,44 +261,45 @@ private Integer mapLigadoDesligado(String s) {
 private void setHeatOpModeByChannel(Integer heatIdx, Integer opVal) {
     if (heatIdx == null || opVal == null) return
     String key = "heat${heatIdx}"
-    Map arg = [heatings: [(key): [opMode: opVal, on: (opVal == 1)]]]
-    sendJson([command:"setDevice", argument: arg])
-    // Atualização otimista de atributos específicos
+    sendJson([command:"setDevice", argument:[heatings:[(key):[opMode:opVal, on:(opVal==1)]]]])
     switch (heatIdx) {
-        case 0: sendEvent(name:"apoioSolar",            value: opVal==1 ? "on":"off"); break
-        case 1: sendEvent(name:"apoioGas",              value: opVal==1 ? "on":"off"); break
-        case 2: sendEvent(name:"apoioEletrico",         value: opVal==1 ? "on":"off"); break
-        case 3: sendEvent(name:"recirculacaoBarrilete", value: opVal==1 ? "on":"off"); break
+        case 0: updateApoioState("solar",        "apoioSolar",            opVal==1); break
+        case 1: updateApoioState("gas",          "apoioGas",              opVal==1); break
+        case 2: updateApoioState("eletrico",     "apoioEletrico",         opVal==1); break
+        case 3: updateApoioState("recirculacao", "recirculacaoBarrilete", opVal==1); break
     }
     runIn(1, "getDevice")
 }
 
+private void updateApoioState(String stateKey, String attrName, boolean nowOn) {
+    boolean wasOn = (device.currentValue(attrName) == "on")
+    sendEvent(name:attrName, value: nowOn ? "on" : "off")
+    if (nowOn != wasOn) trackEnergyTransition(stateKey, nowOn)
+}
+
+// ── Heatings ──────────────────────────────────────────────────────────────────
+def heatOn()  { setHeatingOnOff(true) }
+def heatOff() { setHeatingOnOff(false) }
+
 private void setHeatingOnOff(boolean onVal) {
     Map last  = (state?.lastDevice ?: [:]) as Map
     Map heat0 = ((last.heatings ?: [:]) as Map)?.heat0 as Map
-    Integer typeVal = (heat0?.type   instanceof Number) ? (heat0.type   as Integer) : null
     Integer curMode = (heat0?.opMode instanceof Number) ? (heat0.opMode as Integer) : null
-
-    Integer newMode
-    if (!onVal) {
-        newMode = 0
-    } else {
-        newMode = (curMode == null || curMode == 0) ? 1 : curMode
-    }
-
+    Integer newMode = !onVal ? 0 : ((curMode == null || curMode == 0) ? 1 : curMode)
     sendJson([command:"setDevice", argument:[heatings:[heat0:[on:onVal, opMode:newMode]]]])
     sendEvent(name:"heat0On",   value: onVal ? "on" : "off")
-    if (newMode != null) sendEvent(name:"heat0Mode", value: opModeLabel(newMode, typeVal))
+    if (newMode != null) sendEvent(name:"heat0Mode", value: opModeLabel(newMode, null))
     runIn(1, "getDevice")
 }
 
 def setHeatMode(String mode) {
     Integer idx = opModeIndexFromLabel(mode)
     if (idx == null) { log.warn "setHeatMode: modo inválido '${mode}'"; return }
-    boolean willOn = (idx != 0)
-    sendJson([command:"setDevice", argument:[heatings:[heat0:[opMode:idx, on:willOn]]]])
+    // v1.7: só muda o modo. "on" do heat0 = acionamento da bomba solar; não forçar.
+    Map h0 = (idx == 0) ? [opMode:idx, on:false] : [opMode:idx]
+    sendJson([command:"setDevice", argument:[heatings:[heat0:h0]]])
     sendEvent(name:"heat0Mode", value: opModeLabel(idx, null))
-    sendEvent(name:"heat0On",   value: willOn ? "on" : "off")
+    if (idx == 0) sendEvent(name:"heat0On", value:"off")
     runIn(1, "getDevice")
 }
 
@@ -556,105 +311,170 @@ def setHeatSetpoint(Number spC) {
     runIn(1, "getDevice")
 }
 
-def heatUp1C() {
-    Map last  = (state?.lastDevice ?: [:]) as Map
-    Map heat0 = ((last.heatings ?: [:]) as Map)?.heat0 as Map
+def heatUp1C()   { adjustSetpoint(+1.0G) }
+def heatDown1C() { adjustSetpoint(-1.0G) }
+
+private void adjustSetpoint(BigDecimal delta) {
+    Map heat0 = ((((state?.lastDevice ?: [:]) as Map).heatings ?: [:]) as Map)?.heat0 as Map
     BigDecimal cur = cFromRaw(heat0?.sp) ?: 0.0G
     BigDecimal min = cFromRaw(heat0?.minSp)
     BigDecimal max = cFromRaw(heat0?.maxSp)
-
-    BigDecimal target = cur + 1.0G
+    BigDecimal target = cur + delta
     if (min != null) target = [target, min].max()
     if (max != null) target = [target, max].min()
     setHeatSetpoint(target)
 }
 
-def heatDown1C() {
-    Map last  = (state?.lastDevice ?: [:]) as Map
-    Map heat0 = ((last.heatings ?: [:]) as Map)?.heat0 as Map
-    BigDecimal cur = cFromRaw(heat0?.sp) ?: 0.0G
-    BigDecimal min = cFromRaw(heat0?.minSp)
-    BigDecimal max = cFromRaw(heat0?.maxSp)
-
-    BigDecimal target = cur - 1.0G
-    if (min != null) target = [target, min].max()
-    if (max != null) target = [target, max].min()
-    setHeatSetpoint(target)
-}
-
-// ======== Socket status ========
-
-void socketStatus(String message) {
-    logWarn "socketStatus: ${message}"
-    runIn(5, "connectSocket")
-}
-
-// ======== Logging helpers ========
-
-private void logInfo(msg){ log.info "Tholz TCP: ${msg}" }
-private void logWarn(msg){ log.warn "Tholz TCP: ${msg}" }
-
-// ======== helpers ========
-
-private void pubParentAttr(String name, boolean onVal) {
-    String v = onVal ? "on" : "off"
-    sendEvent(name: name, value: v, descriptionText: "${device.displayName} ${name} is ${v}")
-}
-
-// ======== Heatings helpers ========
-
-private BigDecimal cFromRaw(def v) {
-    if (v == null) return null
-    if ((v instanceof Number) && v.intValue() == 0xAAAA) return null
-    try { return (v as BigDecimal) / 10.0G } catch (ignored) { return null }
-}
-
-private Integer rawFromC(def c) {
-    if (c == null) return null
-    BigDecimal val = (c as BigDecimal)
-    return Math.round(val * 10.0G) as Integer
-}
-
-@Field Map OP_MODE_LABELS_DEFAULT = [
-    0:"Off", 1:"Ligado", 2:"Automático", 3:"Econômico"
-]
-
-private String opModeLabel(Integer opMode, Integer typeVal) {
-    return OP_MODE_LABELS_DEFAULT.get(opMode, "Modo ${opMode}")
-}
-
-private Integer opModeIndexFromLabel(String label) {
-    String x = (label ?: "").trim().toLowerCase()
-    switch (x) {
-        case "off": case "desligado": return 0
-        case "on": case "ligado": return 1
-        case "auto": case "automático": case "automatico": return 2
-        case "econômico": case "economico": return 3
+// ── Output por ID ─────────────────────────────────────────────────────────────
+private void setOutputById(Integer targetId, Boolean onVal) {
+    Map outs = (((state?.lastDevice ?: [:]) as Map)?.outputs ?: [:]) as Map
+    Map argOutputs = [:]
+    outs?.each { k, v -> if (v instanceof Map && v.id == targetId) argOutputs[k as String] = [on:onVal] }
+    if (argOutputs.isEmpty()) {
+        String key = guessOutputKeyForId(targetId, outs)
+        if (key) argOutputs[key] = [on:onVal]
     }
-    try { return Integer.parseInt(x) } catch (ignored) { return null }
+    if (argOutputs.isEmpty()) { logWarn "Não foi possível mapear saída id=${targetId}"; return }
+    sendJson([command:"setDevice", argument:[outputs:argOutputs]])
 }
 
-// ======== Publica atributos do heat0 (com prioridade t3 -> t2 -> t1 -> maior tN) ========
+private String guessOutputKeyForId(Integer idVal, Map outs) {
+    String key = outs?.find { it?.value instanceof Map && it?.value?.id == idVal }?.key
+    if (key) return key as String
+    if (idVal == 1)  return "out1"
+    if (idVal == 3)  return "out3"
+    if (idVal == 0)  return "out0"
+    return null
+}
 
+// ── Socket ────────────────────────────────────────────────────────────────────
+private void sendJson(Map obj) {
+    String js = groovy.json.JsonOutput.toJson(obj)
+    if (logEnable) log.debug "TX: ${js}"
+    try { interfaces.rawSocket.sendMessage(js + "\n") }
+    catch (e) { logWarn "Falha ao enviar (${e}); reconectando..."; reconnect() }
+}
+
+def parse(String description) {
+    if (logEnable) log.debug "RX (String): ${description}"
+    String chunk = looksLikeHex(description) ? hexToUtf8(description) : description
+    state.rxBuf = (state.rxBuf ?: "") + (chunk ?: "")
+    processBuffer()
+}
+
+private boolean looksLikeHex(String s) {
+    return s && (s ==~ /[0-9A-Fa-f]+/) && (s.length() % 2 == 0)
+}
+
+private String hexToUtf8(String hex) {
+    byte[] bytes = new byte[hex.length() / 2]
+    for (int i = 0; i < hex.length(); i += 2) bytes[i/2] = (byte) Integer.parseInt(hex.substring(i, i+2), 16)
+    return new String(bytes, "UTF-8")
+}
+
+private void processBuffer() {
+    String buf = state.rxBuf ?: ""
+    if (!buf) return
+    int level = 0, start = -1
+    List<String> frames = []
+    for (int i = 0; i < buf.length(); i++) {
+        char c = buf.charAt(i)
+        if (c == '{') { if (level == 0) start = i; level++ }
+        else if (c == '}') { level--; if (level == 0 && start >= 0) { frames << buf.substring(start, i+1); start = -1 } }
+    }
+    state.rxBuf = (level == 0) ? "" : (start >= 0 ? buf.substring(start) : buf)
+    frames.each { handleJsonFrame(it) }
+}
+
+private void handleJsonFrame(String jsonText) {
+    if (logEnable) log.debug "JSON frame: ${jsonText}"
+    Map obj
+    try { obj = (Map) new groovy.json.JsonSlurper().parseText(jsonText) } catch (e) { logWarn "Falha JSON: ${e}"; return }
+    if (!obj) return
+    Map resp = (obj.command && obj.response instanceof Map) ? (Map) obj.response : obj
+    if (resp) { state.lastDevice = resp; updateFromResponse(resp) }
+}
+
+private void updateFromResponse(Map resp) {
+    if (resp?.id != null)    sendEvent(name:"deviceId", value:(resp.id as Long))
+    if (resp?.firmware)      sendEvent(name:"fwMain",   value:resp.firmware as String)
+    if (resp?.firmwareSec)   sendEvent(name:"fwSec",    value:resp.firmwareSec as String)
+
+    // Outputs
+    Map outs = (resp.outputs ?: [:]) as Map
+    if (outs) {
+        outs.each { key, node ->
+            if (!(node instanceof Map)) return
+            Integer idVal = (node.id ?: -1) as Integer
+            Boolean isOn  = (node.on == true)
+            String dni = "${device.id}-${key}"
+            def cd = getChildDevice(dni)
+            if (!cd) {
+                String nice = nameForOutputId(idVal) ?: "Output ${idVal}"
+                cd = addChildDevice("hubitat", "Generic Component Switch", dni,
+                    [label:"${device.displayName} - ${nice}", isComponent:true, componentName:key, componentLabel:nice])
+                cd.updateDataValue("outputKey", key)
+                cd.updateDataValue("outputId", "${idVal}")
+            }
+            componentUpdate(cd, isOn ? "on" : "off")
+        }
+        state.lastDevice = (state.lastDevice ?: [:]) + [outputs:outs]
+    }
+
+    // Heatings
+    Map heats = (resp.heatings ?: [:]) as Map
+    Map heat0 = heats?.heat0 as Map
+    if (heat0) publishHeat0(heat0)
+
+    Map heat3 = heats?.heat3 as Map
+    if (heat3?.t4 != null) {
+        BigDecimal tRecirc = cFromRaw(heat3.t4)
+        if (tRecirc != null) sendTempIfChanged("tempRecirculacao", tRecirc)
+    }
+
+    // Estados dos apoios
+    [0:"solar", 1:"gas", 2:"eletrico", 3:"recirculacao"].each { idx, sk ->
+        String heatKey = "heat${idx}"
+        Map hx = heats?."${heatKey}" as Map
+        if (hx == null) return
+        Integer op = (hx?.opMode instanceof Number) ? (hx.opMode as Integer) : null
+        if (op == null) return
+        String attrName = APOIOS_ENERGY_MAP.find { it.stateKey == sk }?.attrOn
+        if (!attrName) return
+        // v1.7: solar (heat0) fica sempre em Automático; a bomba é o campo "on"
+        boolean nowOn = (idx == 0) ? (hx.on == true) : (op == 1)
+        boolean wasOn = (device.currentValue(attrName) == "on")
+        sendEvent(name:attrName, value: nowOn ? "on" : "off")
+        if (nowOn != wasOn) trackEnergyTransition(sk, nowOn)
+    }
+
+    publishAllEnergyAttrs()
+}
+
+// ── Temperaturas com throttle ─────────────────────────────────────────────────
+private void sendTempIfChanged(String attrName, BigDecimal newVal) {
+    double threshold = (settings?.tempThreshold ?: 0.5) as double
+    def prev = device.currentValue(attrName)
+    if (prev != null && Math.abs((newVal as double) - (prev as double)) < threshold) return
+    sendEvent(name:attrName, value:newVal, unit:"°C")
+}
+
+// ── Heat0 ─────────────────────────────────────────────────────────────────────
 private void publishHeat0(Map h) {
     if (!(h instanceof Map)) return
     Integer typeVal = (h.type instanceof Number) ? (h.type as Integer) : null
     Integer op      = (h.opMode instanceof Number) ? (h.opMode as Integer) : null
     Boolean on      = (h.on == true)
     BigDecimal sp   = cFromRaw(h.sp)
-    BigDecimal t1   = cFromRaw(h.t1)   // Coletor
-    BigDecimal t2   = cFromRaw(h.t2)   // Reservatório
-    BigDecimal t3   = cFromRaw(h.t3)   // Consumo (prioridade)
+    BigDecimal t1   = cFromRaw(h.t1)
+    BigDecimal t2   = cFromRaw(h.t2)
+    BigDecimal t3   = cFromRaw(h.t3)
     BigDecimal t4   = cFromRaw(h.t4)
-    BigDecimal t5   = cFromRaw(h.t5)
 
-    // Principal: t3 -> t2 -> t1 -> maior tN disponível
-    BigDecimal tMain = t3
-    if (tMain == null) tMain = t2
-    if (tMain == null) tMain = t1
+    BigDecimal tMain = t3 ?: t2 ?: t1
     if (tMain == null) {
         int maxIdx = -1
-        h.each { k,v ->
+        h.each { k, v ->
             def m = (k instanceof String) ? (k =~ /^t(\d+)$/) : null
             if (m && m.matches()) {
                 int idx = Integer.parseInt(m[0][1])
@@ -664,95 +484,234 @@ private void publishHeat0(Map h) {
         }
     }
 
-    if (tMain != null)   sendEvent(name:"temperature",        value: tMain, unit:"°C")
-    if (t1 != null)      sendEvent(name:"tempColetor",        value: t1,    unit:"°C")
-    if (t2 != null)      sendEvent(name:"tempReservatorio",   value: t2,    unit:"°C")
-    if (t3 != null)      sendEvent(name:"tempConsumo",        value: t3,    unit:"°C")
-    else if (tMain != null) sendEvent(name:"tempConsumo",     value: tMain, unit:"°C")
+    if (tMain != null) sendTempIfChanged("temperature",      tMain)
+    if (t1 != null)    sendTempIfChanged("tempColetor",      t1)
+    if (t2 != null)    sendTempIfChanged("tempReservatorio", t2)
+    if (t3 != null)    sendTempIfChanged("tempConsumo",      t3)
+    else if (tMain != null) sendTempIfChanged("tempConsumo", tMain)
 
-    if (op != null) sendEvent(name:"heat0Mode", value: opModeLabel(op, typeVal))
-    sendEvent(name:"heat0On", value: on ? "on" : "off")
-    if (sp != null) sendEvent(name:"heat0Setpoint", value: sp, unit: "°C")
-}
-
-// ======== Status HTML (Attribute tile) ========
-
-def renderStatus() {
-    String html = buildStatusHtml()
-    // Hubitat recomenda manter <= ~1024-2048 chars no atributo; nosso HTML é enxuto
-    sendEvent(name:"statusHtml", value: html)
-    if (logEnable) log.debug "Status HTML atualizado (${html?.size()} chars)"
-}
-
-private String safe(def v, String defVal = "—") {
-    return (v != null && v.toString().trim()) ? v.toString() : defVal
-}
-
-private String fmtTemp(def v) {
-    return (v != null) ? "${v}°C" : "—"
-}
-
-private String buildStatusHtml() {
-    // Valores principais expostos como atributos
-    def tMain   = device.currentValue("temperature")
-    def tCol    = device.currentValue("tempColetor")
-    def tRes    = device.currentValue("tempReservatorio")
-    def tCons   = device.currentValue("tempConsumo")
-    def tReci   = device.currentValue("tempRecirculacao")
-    def sp      = device.currentValue("heat0Setpoint")
-    def hMode   = device.currentValue("heat0Mode")
-    def hOn     = device.currentValue("heat0On")
-
-    // Pega heatings do último snapshot (se existir) para mostrar resumo
-    Map last   = (state?.lastDevice ?: [:]) as Map
-    Map heats  = (last?.heatings ?: [:]) as Map
-    Map h0     = heats?.heat0 as Map
-    Map h1     = heats?.heat1 as Map
-    Map h2     = heats?.heat2 as Map
-    Map h3     = heats?.heat3 as Map
-
-    def row = { String label, String value ->
-        return """<div class="row"><span class="k">${label}</span><span class="v">${value}</span></div>"""
+    if (op != null) {
+        String newMode = opModeLabel(op, typeVal)
+        if (device.currentValue("heat0Mode") != newMode) sendEvent(name:"heat0Mode", value:newMode)
     }
-
-    def heatRow = { String name, Map h ->
-        if (!(h instanceof Map)) return ""
-        String on   = (h.on == true) ? "Ligado" : "Desligado"
-        String mode = opModeLabel( (h.opMode instanceof Number) ? (h.opMode as Integer) : null, null )
-        return row(name, "${on} / ${mode}")
+    String onStr = on ? "on" : "off"
+    if (device.currentValue("heat0On") != onStr) sendEvent(name:"heat0On", value:onStr)
+    if (sp != null) {
+        def prev = device.currentValue("heat0Setpoint")
+        if (prev == null || Math.abs((sp as double) - (prev as double)) >= 0.5) {
+            sendEvent(name:"heat0Setpoint", value:sp, unit:"°C")
+        }
     }
+}
 
-    String css = """
-        <style>
-        .thz-card{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:8px 10px;border-radius:10px;border:1px solid #ddd}
-        .hdr{font-weight:700;margin-bottom:6px;font-size:14px}
-        .rows{display:flex;flex-direction:column;gap:4px}
-        .row{display:flex;justify-content:space-between;gap:10px}
-        .k{opacity:.75}
-        .v{font-weight:600}
-        .sep{height:1px;background:#eee;margin:6px 0}
-        </style>
-    """.trim()
+// ── Energia ───────────────────────────────────────────────────────────────────
+private void initEnergyState() {
+    APOIOS_ENERGY_MAP.each { ap ->
+        String sk = ap.stateKey
+        if (state["energy_${sk}"] == null)     state["energy_${sk}"]     = 0.0
+        if (state["energyOnAt_${sk}"] == null) state["energyOnAt_${sk}"] = 0L
+    }
+    publishAllEnergyAttrs()
+}
 
-    String body = """
-        <div class="thz-card">
-          <div class="hdr">Tholz SmartHeat — Status</div>
-          <div class="rows">
-            ${row("Temperatura",     fmtTemp(tMain))}
-            ${row("Setpoint",        fmtTemp(sp))}
-            <div class="sep"></div>
-            ${row("Coletor (T0)",    fmtTemp(tCol))}
-            ${row("Reservatório (T1)",fmtTemp(tRes))}
-            ${row("Consumo (T2)",    fmtTemp(tCons))}
-            ${row("Recirculação (T3)",    fmtTemp(tReci))}
-            <div class="sep"></div>
-            ${row("Aquecimento", safe("${safe(hOn)} / ${safe(hMode)}"))}
-            ${heatRow("Apoio Gás", h1)}
-            ${heatRow("Apoio Elétrico", h2)}
-            ${heatRow("Recirculação", h3)}
-          </div>
-        </div>
-    """.trim()
+private void trackEnergyTransition(String stateKey, boolean nowOn) {
+    long ts = now()
+    String onAtKey = "energyOnAt_${stateKey}"
+    String accKey  = "energy_${stateKey}"
+    if (!nowOn) {
+        long onAt = (state[onAtKey] ?: 0L) as Long
+        if (onAt > 0L) {
+            double elapsedH = (ts - onAt) / 3_600_000.0
+            double watts    = getPowerForApoio(stateKey)
+            state[accKey]   = ((state[accKey] ?: 0.0) as double) + (watts * elapsedH / 1000.0)
+        }
+        state[onAtKey] = 0L
+    } else {
+        state[onAtKey] = ts
+    }
+    publishAllEnergyAttrs()
+}
 
-    return css + body
+private double getPowerForApoio(String stateKey) {
+    switch (stateKey) {
+        case "solar":        return (settings?.powerApoioSolar    ?: 0) as double
+        case "gas":          return (settings?.powerApoioGas      ?: 0) as double
+        case "eletrico":     return (settings?.powerApoioEletrico ?: 3000) as double
+        case "recirculacao": return (settings?.powerRecirculacao  ?: 0) as double
+    }
+    return 0.0
+}
+
+// Guard de igualdade — só emite evento se valor mudou (evita flood no Maker API)
+private void publishAllEnergyAttrs() {
+    APOIOS_ENERGY_MAP.each { ap ->
+        String sk    = ap.stateKey
+        double watts = getPowerForApoio(sk)
+        boolean isOn = (device.currentValue(ap.attrOn) == "on")
+
+        double accumulated = (state["energy_${sk}"] ?: 0.0) as double
+        long onAt = (state["energyOnAt_${sk}"] ?: 0L) as Long
+        double livePeriod = (isOn && onAt > 0L) ? ((now() - onAt) / 3_600_000.0 * watts / 1000.0) : 0.0
+        double totalKwh   = accumulated + livePeriod
+        double instPower  = isOn ? watts : 0.0
+
+        // Guard: só emite se mudou
+        def prevPwr = device.currentValue(ap.attrPwr)
+        def prevEng = device.currentValue(ap.attrEng)
+
+        double pwrRounded = instPower.round(1)
+        double engRounded = totalKwh.round(4)
+
+        if (prevPwr == null || Math.abs((prevPwr as double) - pwrRounded) >= 0.1) {
+            sendEvent(name:ap.attrPwr, value:pwrRounded, unit:"W",   descriptionText:"${device.displayName} ${sk} power ${pwrRounded}W")
+        }
+        if (prevEng == null || Math.abs((prevEng as double) - engRounded) >= 0.0001) {
+            sendEvent(name:ap.attrEng, value:engRounded, unit:"kWh", descriptionText:"${device.displayName} ${sk} energy ${engRounded}kWh")
+        }
+
+        updateApoioEnergyChild(ap, pwrRounded, engRounded)
+    }
+}
+
+private void updateApoioEnergyChild(Map ap, double power, double energy) {
+    String dni = "${device.id}-energy-${ap.childSuffix}"
+    def cd = getChildDevice(dni)
+    if (!cd) {
+        String label = "${device.displayName} — ${childEnergyLabel(ap.stateKey)}"
+        try {
+            cd = addChildDevice("hubitat", "Generic Component Switch", dni,
+                [label:label, isComponent:true, componentName:"energy-${ap.childSuffix}", componentLabel:childEnergyLabel(ap.stateKey)])
+            logInfo "Child de energia criado: ${label}"
+        } catch (ex) { logWarn "Falha ao criar child de energia '${label}': ${ex}"; return }
+    }
+    try {
+        // Sincroniza o estado do switch com o estado do apoio no pai
+        boolean isOn = (device.currentValue(ap.attrOn) == "on")
+        String  newSw = isOn ? "on" : "off"
+        def prevSw = cd.currentValue("switch")
+        if (prevSw != newSw) cd.sendEvent(name:"switch", value:newSw)
+
+        // Generic Component Switch não declara power/energy: cd.currentValue() volta null
+        // e o guard nunca segura. Guarda o último valor publicado no state do pai.
+        String kP = "childPwr_${ap.stateKey}"
+        String kE = "childEng_${ap.stateKey}"
+        def prevPwr = state[kP]
+        def prevEng = state[kE]
+        if (prevPwr == null || Math.abs((prevPwr as double) - power) >= 0.1) {
+            cd.sendEvent(name:"power", value:power, unit:"W")
+            state[kP] = power
+        }
+        if (prevEng == null || Math.abs((prevEng as double) - energy) >= 0.0001) {
+            cd.sendEvent(name:"energy", value:energy, unit:"kWh")
+            state[kE] = energy
+        }
+    } catch (ex) { logWarn "Erro ao publicar energia no child ${dni}: ${ex}" }
+}
+
+private String childEnergyLabel(String stateKey) {
+    switch (stateKey) {
+        case "solar":        return "Apoio Solar"
+        case "gas":          return "Apoio a Gás"
+        case "eletrico":     return "Apoio Elétrico"
+        case "recirculacao": return "Recirculação Barrilete"
+    }
+    return stateKey
+}
+
+// ── Reset de energia ──────────────────────────────────────────────────────────
+def resetApoioSolarEnergy()            { resetApoioEnergy("solar") }
+def resetApoioGasEnergy()              { resetApoioEnergy("gas") }
+def resetApoioEletricoEnergy()         { resetApoioEnergy("eletrico") }
+def resetRecirculacaoBarrileteEnergy() { resetApoioEnergy("recirculacao") }
+
+private void resetApoioEnergy(String stateKey) {
+    logInfo "Resetando energia: ${stateKey}"
+    state["energy_${stateKey}"] = 0.0
+    String attrOn = APOIOS_ENERGY_MAP.find { it.stateKey == stateKey }?.attrOn
+    state["energyOnAt_${stateKey}"] = (attrOn && device.currentValue(attrOn) == "on") ? now() : 0L
+    publishAllEnergyAttrs()
+}
+
+// ── Component handlers ────────────────────────────────────────────────────────
+def componentOn(cd) {
+    String dni = cd.deviceNetworkId ?: ""
+    if (dni.contains("-energy-")) { routeApoioSwitch(dni, "Ligado"); return }
+    String outKey = cd.getDataValue("outputKey")
+    if (outKey) { sendJson([command:"setDevice", argument:[outputs:[(outKey):[on:true]]]]); runIn(1,"getDevice") }
+}
+
+def componentOff(cd) {
+    String dni = cd.deviceNetworkId ?: ""
+    if (dni.contains("-energy-")) { routeApoioSwitch(dni, "Desligado"); return }
+    String outKey = cd.getDataValue("outputKey")
+    if (outKey) { sendJson([command:"setDevice", argument:[outputs:[(outKey):[on:false]]]]); runIn(1,"getDevice") }
+}
+
+private void routeApoioSwitch(String dni, String estado) {
+    logInfo "Child apoio switch: ${dni} -> ${estado}"
+    if      (dni.endsWith("-apoio-solar"))            { setApoioSolar(estado) }
+    else if (dni.endsWith("-apoio-gas"))              { setApoioGas(estado) }
+    else if (dni.endsWith("-apoio-eletrico"))         { setApoioEletrico(estado) }
+    else if (dni.endsWith("-recirculacao-barrilete")) { setRecirculacaoBarrilete(estado) }
+    else { logWarn "routeApoioSwitch: DNI não reconhecido: ${dni}" }
+}
+
+private void componentUpdate(def cd, String ev) {
+    try { cd.parse([[name:"switch", value:ev, descriptionText:"${cd.displayName} was turned ${ev}"]]) }
+    catch (ignored) { cd.sendEvent(name:"switch", value:ev) }
+}
+
+
+// ── Socket status ─────────────────────────────────────────────────────────────
+void socketStatus(String message) {
+    logWarn "socketStatus: ${message}"
+    runIn(5, "connectSocket")
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+private void sendDriverInfo() {
+    sendEvent(name:"driverVersion",   value:DRIVER_VERSION)
+    sendEvent(name:"driverBuildDate", value:DRIVER_BUILD_DATE)
+    if (logEnable) log.debug "Driver info -> version=${DRIVER_VERSION}, build=${DRIVER_BUILD_DATE}"
+}
+
+private void logInfo(msg) { log.info "Tholz TCP: ${msg}" }
+private void logWarn(msg) { log.warn "Tholz TCP: ${msg}" }
+
+private BigDecimal cFromRaw(def v) {
+    if (v == null) return null
+    if ((v instanceof Number) && v.intValue() == 0xAAAA) return null
+    try { return (v as BigDecimal) / 10.0G } catch (ignored) { return null }
+}
+
+private Integer rawFromC(def c) {
+    if (c == null) return null
+    return Math.round((c as BigDecimal) * 10.0G) as Integer
+}
+
+private String opModeLabel(Integer opMode, Integer typeVal) {
+    return OP_MODE_LABELS_DEFAULT.get(opMode, "Modo ${opMode}")
+}
+
+private Integer opModeIndexFromLabel(String label) {
+    String x = (label ?: "").trim().toLowerCase()
+    switch (x) {
+        case "off": case "desligado": return 0
+        case "on":  case "ligado":    return 1
+        case "auto": case "automático": case "automatico": return 2
+        case "econômico": case "economico": return 3
+    }
+    try { return Integer.parseInt(x) } catch (ignored) { return null }
+}
+
+private String nameForOutputId(Integer idVal) {
+    switch (idVal) {
+        case 0: return "Filtro"
+        case 1: return "Apoio Elétrico"
+        case 2: return "Apoio a Gás"
+        case 3: return "Recirculação"
+        case 4: return "Borbulhador"
+        case 5: return "Circulação"
+    }
+    return null
 }

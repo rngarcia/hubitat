@@ -20,6 +20,15 @@ Based on the original driver by VH / TRATO ([hhorigian](https://github.com/hhori
 
 ## Installation
 
+### Hubitat Package Manager (HPM)
+
+In HPM, choose **Install → Search by Keywords** and search for `Tholz`. Or use **From a URL** with:
+`https://raw.githubusercontent.com/rngarcia/hubitat-tholz-smartheat/main/packageManifest.json`
+
+Then create the device and set the preferences as described in steps 2–5 below.
+
+### Manual
+
 1. **Drivers Code → New Driver → Import** and paste:
    `https://raw.githubusercontent.com/rngarcia/hubitat-tholz-smartheat/main/hubitat_Tholz_SmartHeat.groovy`
    Then **Save**.

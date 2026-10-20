@@ -1,0 +1,18 @@
+{
+  "author": "Ricardo Nogueira Garcia",
+  "gitHubUrl": "https://github.com/rngarcia",
+  "packages": [
+    {
+      "id": "609d9770-0a90-4d97-a013-10aa07e7eb68",
+      "name": "Tholz SmartHeat",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat-tholz-smartheat/main/packageManifest.json",
+      "description": "Local TCP driver for the Tholz SmartHeat 2nd gen solar water-heater controller: temperatures, heat modes, setpoint, channel control and per-channel energy estimates.",
+      "tags": [
+        "Water Heater",
+        "Energy Monitoring",
+        "LAN"
+      ]
+    }
+  ]
+}

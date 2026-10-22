@@ -1,182 +1,82 @@
 /**
  *  Tuya Tank Level Monitor (Wi-Fi) Local — Hubitat Driver
- *  Versão: 2.0.1 — Build: 2026-10-21
+ *  Versão: 2.1.0 — Build: 2026-10-22
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
  *
+ *  Lê sensores ultrassônicos de nível Tuya Wi-Fi (categoria "ywcgq") direto pela
+ *  rede local, porta TCP 6668, sem passar pela nuvem Tuya.
+ *
+ *  Pré-requisitos: IP fixo do sensor, Device ID e Local Key. A Local Key muda a cada
+ *  novo pareamento com o app Tuya / Smart Life. Para descobrir ID, key e versão:
+ *    pip install tinytuya && python -m tinytuya wizard
+ *
+ *  Protocolos suportados: 3.3, 3.4 e 3.5. O 3.5 (firmware recente) usa AES-GCM, que
+ *  o sandbox do Hubitat não expõe (GCMParameterSpec é bloqueado), por isso o GCM é
+ *  implementado aqui sobre AES-ECB.
+ *
+ *  Implementação do protocolo baseada no TinyTuya (Jason Cox, MIT License):
+ *    https://github.com/jasonacox/tinytuya
+ *
  *  Changelog:
+ *  v2.1.0 (2026-10-22) - RNG
+ *    - Camada de protocolo reescrita: suporte a 3.5 (frames 6699 + AES-GCM),
+ *      negociação de sessão 3.4/3.5 corrigida, frames fragmentados, CRC32 próprio
+ *    - DPs corrigidos para a categoria ywcgq (estado 1, profundidade 2, nível 22)
+ *    - Conexão persistente opcional com heartbeat, e reconexão com espera
+ *    - Removidos: protocolo 3.1 e resolução de hostname (o sandbox não permite DNS)
  *  v2.0.1 (2026-10-21) - RNG
  *    - Publicado em rngarcia/hubitat: cabeçalho padronizado, namespace "rng" e importUrl
- *  (histórico anterior no bloco de comentário abaixo)
- */
-/**
- * ╔══════════════════════════════════════════════════════════════════════════════╗
- * ║   Tuya Tank Level Monitor (Wi-Fi) — Local Protocol Driver (Hubitat)        ║
- * ╚══════════════════════════════════════════════════════════════════════════════╝
- *
- *  Comunicação DIRETA com o dispositivo via rede local (sem Tuya Cloud).
- *  Utiliza o protocolo local Tuya na porta 6668, com criptografia AES-128-ECB.
- *  Compatível com versões de protocolo 3.1, 3.3 e 3.4.
- *
- * ──────────────────────────────────────────────────────────────────────────────
- *  PRÉ-REQUISITOS
- * ──────────────────────────────────────────────────────────────────────────────
- *  Para comunicação local, você precisa de três valores do dispositivo.
- *  Use o utilitário TinyTuya para obtê-los:
- *    • IP ou hostname do dispositivo
- *    • Device ID  (devId / gwId)
- *    • Local Key  (chave AES de 16 bytes, atribuída no momento do pareamento)
- *
- *  Instalação do TinyTuya:
- *    pip install tinytuya
- *    python -m tinytuya wizard
- *    Referência: https://github.com/jasonacox/tinytuya
- *
- *  ATENÇÃO: A Local Key muda toda vez que o dispositivo é re-pareado com o
- *           aplicativo Tuya / Smart Life. Se a comunicação parar de funcionar,
- *           re-execute o wizard do TinyTuya e atualize a chave nas preferências.
- *
- * ──────────────────────────────────────────────────────────────────────────────
- *  MAPEAMENTO DPS (Data Points)
- * ──────────────────────────────────────────────────────────────────────────────
- *  Os DPS abaixo são os típicos desta classe de dispositivo.
- *  Se o seu firmware usar números diferentes, ajuste as constantes DPS_* abaixo.
- *
- *    DPS  1  / liquid_level_percent  (0..100)      → level (%)
- *    DPS  3  / liquid_depth          (m, scale 2)  → liquidDepthCm (cm)
- *    DPS  5  / liquid_state          (enum)        → liquidState
- *    DPS 101 / max_set               (0..100)      → upperLimit (%)
- *    DPS 102 / mini_set              (0..100)      → lowerLimit (%)
- *    DPS 104 / installation_height   (m, scale 3)  → installationHeight (m)
- *    DPS 106 / liquid_depth_max      (m, scale 3)  → liquidDepthMax (m)
- *
- * ──────────────────────────────────────────────────────────────────────────────
- *  CÁLCULO DE VOLUME (opcional)
- * ──────────────────────────────────────────────────────────────────────────────
- *  Suporta tanques retangulares e cilíndricos verticais.
- *  Gera os atributos: volumeLiters, tankCapacityLiters,
- *                     volumePercentOfCapacity, tankTemplate
- *
- * ──────────────────────────────────────────────────────────────────────────────
- *  COMANDOS DE CALIBRAÇÃO (escrevem DPS no dispositivo)
- * ──────────────────────────────────────────────────────────────────────────────
- *  setUpperLimit / setLowerLimit / setInstallationHeight / setLiquidDepthMax
- *  calibSetUpperFromCurrentLevel / calibSetLowerFromCurrentLevel
- *  calibSetDepthMaxFromCurrentDepth / calibSetDepthMaxFromInstallationHeight
- *  calibSetInstallationHeightFromDepthMax
- *
- * ──────────────────────────────────────────────────────────────────────────────
- *  VERSÃO E HISTÓRICO
- * ──────────────────────────────────────────────────────────────────────────────
- *  Version: 2.0.0 (2026-05-21)
- *
- *  Changelog:
- *    2.0.0 (2026-05-21) - Reescrita completa como driver standalone com protocolo
- *                         local Tuya (sem cloud / sem parent driver). Adiciona
- *                         conexão rawSocket na porta 6668, criptografia AES-128-ECB,
- *                         suporte a versões 3.1 / 3.3 / 3.4 (incluindo negociação
- *                         de chave de sessão para 3.4), polling configurável,
- *                         capability PresenceSensor, suporte a hostname,
- *                         auto-reconnect, heartbeat e lógica de retry.
- *                         Cálculo de volume, comandos de calibração e template
- *                         de dashboard mantidos da v1.x.
- *    1.2.0 (2026-05-21) - (cloud/child) Polling configurável.
- *    1.1.2 (2026-01-19) - (cloud/child) Lançamento público inicial.
- *
- *  Implementação do protocolo baseada no trabalho de Ivar Holand:
- *    https://github.com/ivarho/hubitatappndevice (Apache 2.0 License)
+ *  v2.0.0 (2026-05-21) - RNG
+ *    - Primeira versão local (não funcionava: protocolo 3.5 ausente e DPs errados)
+ *  v1.2.0 (2026-05-21) / v1.1.2 (2026-01-19) - RNG
+ *    - Versões cloud (componente do Tuya IoT Platform)
  */
 
-// ──────────────────────────────────────────────────────────────────────────────
-// IMPORTS
-// Bibliotecas necessárias para criptografia, JSON, sockets e helpers do Hubitat.
-// ──────────────────────────────────────────────────────────────────────────────
 import groovy.transform.Field
-import groovy.json.JsonSlurper
-import groovy.json.JsonBuilder
 import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import java.security.MessageDigest
-import hubitat.device.HubAction
-import hubitat.device.Protocol
 import hubitat.helper.HexUtils
 
-// ──────────────────────────────────────────────────────────────────────────────
-// CONSTANTES GLOBAIS — IDENTIFICAÇÃO DO DRIVER
-// Usadas em logs de ciclo de vida (installed / updated).
-// ──────────────────────────────────────────────────────────────────────────────
-@Field static final String DRIVER_VERSION = "2.0.1"
-@Field static final String DRIVER_DATE    = "2026-05-21"
+@Field static final String DRIVER_VERSION = "2.1.0"
 
-// ──────────────────────────────────────────────────────────────────────────────
-// CONSTANTES GLOBAIS — MAPEAMENTO DE DPS
-// Cada constante mapeia um atributo Hubitat ao número de DPS do protocolo Tuya.
-// Se o seu dispositivo usar números diferentes, altere apenas aqui.
-// ──────────────────────────────────────────────────────────────────────────────
-@Field static final String DPS_LEVEL          = "1"    // Nível em % (0..100)
-@Field static final String DPS_DEPTH          = "3"    // Profundidade em metros (scale 2, ex: 125 = 1,25m)
-@Field static final String DPS_STATE          = "5"    // Estado: normal / lower_alarm / upper_alarm
-@Field static final String DPS_UPPER_LIMIT    = "101"  // Limite superior de alarme (%)
-@Field static final String DPS_LOWER_LIMIT    = "102"  // Limite inferior de alarme (%)
-@Field static final String DPS_INSTALL_HEIGHT = "104"  // Altura de instalação do sensor (scale 3, ex: 3000 = 3,000m)
-@Field static final String DPS_DEPTH_MAX      = "106"  // Profundidade máxima configurada (scale 3)
+// DPs da categoria ywcgq. Os de configuração só aparecem quando o sensor os envia.
+@Field static final String DP_STATE          = "1"   // enum: normal / lower_alarm / upper_alarm
+@Field static final String DP_DEPTH          = "2"   // altura da coluna d'água, m × 100
+@Field static final String DP_UPPER_LIMIT    = "7"   // max_set, %
+@Field static final String DP_LOWER_LIMIT    = "8"   // mini_set, %
+@Field static final String DP_INSTALL_HEIGHT = "19"  // installation_height, m × 1000
+@Field static final String DP_DEPTH_MAX      = "21"  // liquid_depth_max, m × 1000
+@Field static final String DP_LEVEL          = "22"  // liquid_level_percent, %
+@Field static final List<Integer> CONFIG_DPS = [7, 8, 19, 21]
 
-// ──────────────────────────────────────────────────────────────────────────────
-// CONSTANTES GLOBAIS — PROTOCOLO TUYA LOCAL
-// Definem a estrutura de frame, porta, timeouts e número máximo de tentativas.
-// O prefixo/sufixo são os "magic bytes" que delimitam cada frame Tuya.
-// ──────────────────────────────────────────────────────────────────────────────
-@Field static final Integer TUYA_PORT        = 6668          // Porta TCP do protocolo local
-@Field static final String  TUYA_PREFIX      = "000055AA"    // Início de frame (magic bytes)
-@Field static final String  TUYA_SUFFIX      = "0000AA55"    // Fim de frame (magic bytes)
-@Field static final Integer TUYA_HEADER_LEN  = 16            // Tamanho do cabeçalho em bytes
-@Field static final Integer SEND_TIMEOUT_MS  = 2000          // Timeout de resposta (ms)
-@Field static final Integer MAX_RETRIES      = 3             // Tentativas antes de fechar o socket
+@Field static final Integer TUYA_PORT = 6668
 
-// ──────────────────────────────────────────────────────────────────────────────
-// CONSTANTES GLOBAIS — TIPOS DE FRAME (Frame Type IDs)
-// O byte de tipo no cabeçalho Tuya indica a natureza de cada mensagem:
-//   KEY_START / KEY_RESP / KEY_FINAL → negociação de chave de sessão (v3.4)
-//   CONTROL / CONTROL_NEW           → comando de escrita de DPS enviado ao device
-//   STATUS_RESP                     → resposta a um comando de escrita
-//   HEART_BEAT                      → keepalive bidirecional
-//   DP_QUERY / DP_QUERY_NEW         → consulta de status (resposta ao refresh)
-// ──────────────────────────────────────────────────────────────────────────────
-@Field static final Integer FT_KEY_START    = 3
-@Field static final Integer FT_KEY_RESP     = 4
-@Field static final Integer FT_KEY_FINAL    = 5
-@Field static final Integer FT_CONTROL      = 7
-@Field static final Integer FT_STATUS_RESP  = 8
-@Field static final Integer FT_HEARTBEAT    = 9
-@Field static final Integer FT_DP_QUERY     = 10
-@Field static final Integer FT_CONTROL_NEW  = 13
-@Field static final Integer FT_DP_QUERY_NEW = 16
+@Field static final Integer CMD_SESS_KEY_START  = 3
+@Field static final Integer CMD_SESS_KEY_RESP   = 4
+@Field static final Integer CMD_SESS_KEY_FINISH = 5
+@Field static final Integer CMD_CONTROL         = 7
+@Field static final Integer CMD_STATUS          = 8
+@Field static final Integer CMD_HEART_BEAT      = 9
+@Field static final Integer CMD_DP_QUERY        = 10
+@Field static final Integer CMD_CONTROL_NEW     = 13
+@Field static final Integer CMD_DP_QUERY_NEW    = 16
+@Field static final Integer CMD_UPDATEDPS       = 18
 
-// ──────────────────────────────────────────────────────────────────────────────
-// CAMPOS ESTÁTICOS — COMANDO PENDENTE
-// Armazenam o último comando enviado para retry automático em caso de timeout.
-// @Field static garante persistência entre invocações do mesmo device handler.
-// ──────────────────────────────────────────────────────────────────────────────
-@Field static String fPendingCommand = ""
-@Field static Map    fPendingMessage = [:]
+// Comandos que não levam o cabeçalho "3.x" + 12 zeros no payload
+@Field static final List<Integer> NO_VERSION_HEADER = [3, 4, 5, 9, 10, 16, 18]
 
-/* ══════════════════════════════════════════════════════════════════════════════
- *  METADATA — Definição do device, capabilities, atributos e preferências
- *
- *  capabilities:
- *    Refresh        → comando refresh() para consulta manual de status
- *    Sensor         → indica que o device reporta leituras
- *    Configuration  → comando configure() para reconfigurar schedules
- *    PresenceSensor → "present" quando o socket está conectado e respondendo
- *
- *  Atributos divididos em grupos:
- *    • Sensor principal: level, liquidDepthCm, liquidState
- *    • Configuração do device: upperLimit, lowerLimit, installationHeight, liquidDepthMax
- *    • Volume: tankCapacityLiters, volumeLiters, volumePercentOfCapacity, tankTemplate
- * ══════════════════════════════════════════════════════════════════════════════ */
+@Field static final String PREFIX_55AA = "000055AA"
+@Field static final String PREFIX_6699 = "00006699"
+
+// Sessão por dispositivo: buffer de recepção, chave de sessão, sequência, fila
+@Field static final Map<Long, Map> SESSIONS = new ConcurrentHashMap<Long, Map>()
+
 metadata {
     definition(
         name: "Tuya Tank Level Monitor (Wi-Fi) Local",
@@ -187,1475 +87,788 @@ metadata {
         capability "Refresh"
         capability "Sensor"
         capability "Configuration"
-        capability "PresenceSensor"   // "present" = socket conectado e respondendo
+        capability "PresenceSensor"   // "present" = sessão local ativa
 
-        // ── Atributos do sensor principal ─────────────────────────────────────
-        attribute "level",             "number"  // Nível do líquido em % (0..100)
-        attribute "liquidDepthCm",     "number"  // Profundidade em cm (normalizado pelo driver)
-        attribute "liquidState",       "string"  // Estado: normal / lower_alarm / upper_alarm
+        attribute "level",              "number"
+        attribute "liquidDepthCm",      "number"
+        attribute "liquidState",        "string"
+        attribute "upperLimit",         "number"
+        attribute "lowerLimit",         "number"
+        attribute "installationHeight", "number"
+        attribute "liquidDepthMax",     "number"
+        attribute "tankCapacityLiters",      "number"
+        attribute "volumeLiters",            "number"
+        attribute "volumePercentOfCapacity", "number"
+        attribute "tankTemplate",            "string"
 
-        // ── Configurações do device (espelhadas localmente, graváveis via comandos) ─
-        attribute "upperLimit",        "number"  // Limite superior de alarme (%)
-        attribute "lowerLimit",        "number"  // Limite inferior de alarme (%)
-        attribute "installationHeight","number"  // Altura de instalação do sensor (m)
-        attribute "liquidDepthMax",    "number"  // Profundidade máxima configurada (m)
-
-        // ── Atributos de volume (calculados localmente pelo driver) ────────────
-        attribute "tankCapacityLiters",      "number"  // Capacidade total do tanque (L)
-        attribute "volumeLiters",            "number"  // Volume atual (L)
-        attribute "volumePercentOfCapacity", "number"  // Volume atual em % da capacidade
-        attribute "tankTemplate",            "string"  // String resumida para tiles de dashboard
-
-        // ── Comandos de escrita de DPS no device ──────────────────────────────
-        command "setUpperLimit",         [[name:"Percent", type:"NUMBER", description:"0..100"]]
-        command "setLowerLimit",         [[name:"Percent", type:"NUMBER", description:"0..100"]]
-        command "setInstallationHeight", [[name:"Meters",  type:"NUMBER", description:"Ex.: 3.000"]]
-        command "setLiquidDepthMax",     [[name:"Meters",  type:"NUMBER", description:"Ex.: 2.900"]]
-
-        // ── Comandos de calibração (derivam valores dos atributos atuais) ──────
-        command "calibSetUpperFromCurrentLevel"           // max_set ← level atual
-        command "calibSetLowerFromCurrentLevel"           // mini_set ← level atual
-        command "calibSetDepthMaxFromCurrentDepth"        // liquid_depth_max ← liquidDepthCm atual
-        command "calibSetDepthMaxFromInstallationHeight"  // liquid_depth_max ← installationHeight atual
-        command "calibSetInstallationHeightFromDepthMax"  // installation_height ← liquidDepthMax atual
-
-        // ── Gerenciamento de conexão ───────────────────────────────────────────
-        command "disconnect"   // Fecha o socket TCP manualmente
+        command "setUpperLimit",         [[name: "Percent", type: "NUMBER", description: "0..100"]]
+        command "setLowerLimit",         [[name: "Percent", type: "NUMBER", description: "0..100"]]
+        command "setInstallationHeight", [[name: "Meters",  type: "NUMBER", description: "Ex.: 0.680"]]
+        command "setLiquidDepthMax",     [[name: "Meters",  type: "NUMBER", description: "Ex.: 0.450"]]
+        command "calibSetUpperFromCurrentLevel"
+        command "calibSetLowerFromCurrentLevel"
+        command "calibSetDepthMaxFromCurrentDepth"
+        command "calibSetDepthMaxFromInstallationHeight"
+        command "calibSetInstallationHeightFromDepthMax"
+        command "disconnect"
     }
 
     preferences {
-        // ── Seção: Conexão com o dispositivo ──────────────────────────────────
-        // Estas três configurações são obrigatórias e obtidas via TinyTuya.
-        input name: "deviceHost", type: "text",
-              title: "IP ou hostname do dispositivo",
-              description: "Ex.: 192.168.1.100 ou tank-sensor.local — use IP fixo para estabilidade",
-              required: true
-
-        input name: "deviceId", type: "text",
-              title: "Device ID (devId)",
-              description: "ID único do device Tuya. Obter com: python -m tinytuya wizard",
-              required: true
-
-        input name: "localKey", type: "password",
-              title: "Local Key (16 caracteres)",
-              description: "Chave AES-128. ATENÇÃO: muda a cada re-pareamento com o app Tuya!",
-              required: true
-
-        input name: "tuyaProtVersion", type: "enum",
-              title: "Versão do protocolo",
-              description: "Verificar com TinyTuya. v3.3 é o mais comum em devices Wi-Fi recentes.",
-              options: ["31":"3.1", "33":"3.3", "34":"3.4"],
-              defaultValue: "33", required: true
-
-        // ── Seção: Comportamento da conexão ───────────────────────────────────
-        // auto-reconnect mantém uma conexão persistente que se reconecta a cada ciclo.
-        // heartbeat é recomendado apenas para protocolo 3.4, onde reduz overhead de sessão.
-        input name: "autoReconnect", type: "bool",
-              title: "Auto-reconectar quando o socket for fechado",
-              description: "Mantém conexão persistente; reconecta a cada ciclo de ~30s.",
+        input name: "deviceHost", type: "text", title: "IP do sensor",
+              description: "Reserve um IP fixo no roteador", required: true
+        input name: "deviceId", type: "text", title: "Device ID", required: true
+        input name: "localKey", type: "password", title: "Local Key (16 caracteres)",
+              description: "Muda a cada novo pareamento com o app Tuya", required: true
+        input name: "tuyaProtVersion", type: "enum", title: "Versão do protocolo",
+              description: "Confira com: python -m tinytuya scan",
+              options: ["33": "3.3", "34": "3.4", "35": "3.5"], defaultValue: "35", required: true
+        input name: "persistent", type: "bool", title: "Manter conexão aberta",
+              description: "Recebe as mudanças na hora (heartbeat a cada 20 s). Desligado: conecta só no polling.",
               defaultValue: true
-
-        input name: "heartbeatEnable", type: "bool",
-              title: "Usar heartbeat para manter conexão ativa (recomendado para v3.4)",
-              description: "Envia keepalive a cada 20s. Reduz reestabelecimentos de sessão no v3.4.",
-              defaultValue: false
-
-        // ── Seção: Polling periódico ───────────────────────────────────────────
-        // O polling envia um "status request" ao dispositivo no intervalo configurado.
-        // Com auto-reconnect ativo, o device também envia pushes espontâneos — nesse
-        // caso é possível usar intervalos longos (5..30 min) e ainda ter dados frescos.
-        input name: "pollingEnable", type: "bool",
-              title: "Habilitar polling periódico (requisição de status)",
-              defaultValue: true
-
-        input name: "pollingInterval", type: "enum",
-              title: "Intervalo de polling",
-              description: "Mínimo de 30s para não sobrecarregar o device.",
-              options: [
-                  "30"  : "30 segundos",
-                  "60"  : "1 minuto",
-                  "120" : "2 minutos",
-                  "300" : "5 minutos",
-                  "600" : "10 minutos",
-                  "900" : "15 minutos",
-                  "1800": "30 minutos",
-                  "3600": "1 hora"
-              ],
+        input name: "pollingInterval", type: "enum", title: "Intervalo de polling",
+              options: ["0": "Desligado", "60": "1 minuto", "300": "5 minutos", "600": "10 minutos",
+                        "900": "15 minutos", "1800": "30 minutos", "3600": "1 hora"],
               defaultValue: "300", required: true
 
-        // ── Seção: Cálculo de volume ───────────────────────────────────────────
-        // Calcula volume corrente e capacidade total a partir das dimensões do tanque.
-        // A altura utilizável é determinada na ordem: preferência manual >
-        //   liquidDepthMax (DPS 106) > installationHeight (DPS 104).
-        input name: "enableVolumeCalc", type: "bool",
-              title: "Habilitar cálculo de volume",
-              defaultValue: true
-
-        input name: "tankShape", type: "enum",
-              title: "Formato do tanque",
-              options: [
-                  "rectangular":"Retangular (C × L × A)",
-                  "cylVertical" :"Cilíndrico vertical (diâmetro × A)"
-              ],
-              defaultValue: "rectangular", required: true
-
-        // Dimensões para tanque retangular
-        input name: "tankLengthCm",   type: "number", title: "Comprimento do tanque (cm) — retangular",   required: false
-        input name: "tankWidthCm",    type: "number", title: "Largura do tanque (cm) — retangular",       required: false
-
-        // Dimensão para tanque cilíndrico vertical
-        input name: "tankDiameterCm", type: "number", title: "Diâmetro do tanque (cm) — cilíndrico",     required: false
-
-        // Sobrescreve a altura usada para calcular capacidade (opcional).
-        // Se não informado, usa liquidDepthMax ou installationHeight do próprio device.
-        input name: "tankUsableHeightM", type: "number",
-              title: "Altura utilizável (m) — sobrescreve valor do device (opcional)",
-              required: false
-
-        // Controla o arredondamento do volume exibido (ex.: 10 → exibe múltiplos de 10L)
-        input name: "roundVolumeLiters", type: "number",
-              title: "Arredondar volume para o múltiplo mais próximo de N litros (ex.: 1, 5, 10)",
+        input name: "enableVolumeCalc", type: "bool", title: "Calcular volume", defaultValue: false
+        input name: "tankShape", type: "enum", title: "Formato do tanque",
+              options: ["rectangular": "Retangular (C × L)", "cylVertical": "Cilíndrico vertical"],
+              defaultValue: "rectangular"
+        input name: "tankLengthCm",      type: "number",  title: "Comprimento (cm), retangular"
+        input name: "tankWidthCm",       type: "number",  title: "Largura (cm), retangular"
+        input name: "tankDiameterCm",    type: "number",  title: "Diâmetro (cm), cilíndrico"
+        input name: "tankUsableHeightM", type: "decimal", title: "Altura útil (m), opcional",
+              description: "Se vazio, usa liquidDepthMax ou installationHeight do sensor"
+        input name: "roundVolumeLiters", type: "number",  title: "Arredondar volume para múltiplos de N litros",
               defaultValue: 1
 
-        // ── Seção: Logging ────────────────────────────────────────────────────
-        input name: "txtEnable", type: "bool",
-              title: "Habilitar log de descrição (descriptionText)",
-              defaultValue: true
-
-        input name: "logEnable", type: "bool",
-              title: "Habilitar log de debug (desativa automaticamente após 30 min)",
-              defaultValue: true
+        input name: "txtEnable", type: "bool", title: "Log de descrição", defaultValue: true
+        input name: "logEnable", type: "bool", title: "Log de debug (desliga sozinho em 30 min)", defaultValue: false
     }
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
- *  CICLO DE VIDA DO DRIVER
- *
- *  installed() → chamado uma única vez ao criar o device no Hubitat.
- *  updated()   → chamado toda vez que as preferências são salvas.
- *                Cancela todos os schedules anteriores, reinicia a sessão Tuya,
- *                registra os novos schedules de polling e aciona um refresh.
- *  configure() → exposto na UI do Hubitat; reinicia sessão e schedules.
- *  logsOff()   → desativa debug após 30 min (privado: não aparece na lista de comandos).
- * ══════════════════════════════════════════════════════════════════════════════ */
 void installed() {
-    logInfo "Instalado v${DRIVER_VERSION} (${DRIVER_DATE})"
-    // Inicia como "not present" até que o socket confirme comunicação
     sendEvent(name: "presence", value: "not present")
     updated()
 }
 
 void updated() {
-    logInfo "Atualizado v${DRIVER_VERSION} (${DRIVER_DATE})"
-    // Limpa todos os schedules pendentes para evitar duplicação
+    logInfo "Configurado v${DRIVER_VERSION}"
     unschedule()
-    // Agenda auto-desligamento do debug logging em 30 min
-    if (settings?.logEnable) runIn(1800, "logsOff")
-    // Reinicia estado da sessão Tuya (necessário p/ nova chave, IP, versão, etc.)
-    tuyaSessionReset()
-    // Registra o schedule de polling com o novo intervalo
+    closeSocket("configuração alterada")
+    if (logEnable) runIn(1800, "logsOff")
     schedulePolling()
-    // Aguarda 2s antes do primeiro refresh para o hub estabilizar
     runIn(2, "refresh")
 }
 
 void configure() {
-    logDebug "configure()"
-    tuyaSessionReset()
-    schedulePolling()
-    // Recalcula volume com os dados já em memória (sem precisar de novo refresh)
-    recalcVolume()
+    updated()
 }
 
-/**
- * Desativa o log de debug após o timer de 30 min.
- * Declarado como private para não aparecer na lista de comandos do Hubitat.
- */
-private void logsOff() {
+void logsOff() {
     device.updateSetting("logEnable", [value: "false", type: "bool"])
-    logInfo "Log de debug desativado"
+    logInfo "Log de debug desligado"
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
- *  POLLING PERIÓDICO
- *
- *  schedulePolling() → registra o Cron/runEvery apropriado baseado no intervalo.
- *                      Intervalos < 60s usam expressão Cron (scheduler nativo);
- *                      intervalos em minutos usam os helpers runEvery* do Hubitat.
- *                      Floor de 30s para não sobrecarregar a API local do device.
- *  pollDevice()      → alvo do scheduler; delega para refresh().
- * ══════════════════════════════════════════════════════════════════════════════ */
 private void schedulePolling() {
-    unschedule("pollDevice")
-    if (!settings?.pollingEnable) {
-        logInfo "Polling desabilitado"
-        return
+    Integer secs = (pollingInterval ?: "300") as Integer
+    switch (secs) {
+        case 0:    break
+        case 60:   runEvery1Minute("refresh");    break
+        case 300:  runEvery5Minutes("refresh");   break
+        case 600:  runEvery10Minutes("refresh");  break
+        case 900:  runEvery15Minutes("refresh");  break
+        case 1800: runEvery30Minutes("refresh");  break
+        default:   runEvery1Hour("refresh")
     }
-    Integer secs = (settings?.pollingInterval ?: "300") as Integer
-    // Garante mínimo de 30s para não martelar o device
-    if (secs < 30) secs = 30
-
-    if (secs < 60) {
-        // Expressão Cron para intervalos sub-minuto (ex.: "0/30 * * * * ?")
-        schedule("0/${secs} * * * * ?", "pollDevice")
-    } else {
-        Integer mins = (secs / 60) as Integer
-        switch (mins) {
-            case 1:  runEvery1Minute("pollDevice");   break
-            case 5:  runEvery5Minutes("pollDevice");  break
-            case 10: runEvery10Minutes("pollDevice"); break
-            case 15: runEvery15Minutes("pollDevice"); break
-            case 30: runEvery30Minutes("pollDevice"); break
-            default: runEvery1Hour("pollDevice");     break
-        }
-    }
-    logInfo "Polling agendado a cada ${secs}s"
 }
 
-/** Alvo do scheduler de polling. Delega para refresh(). */
-void pollDevice() {
-    logDebug "pollDevice() — gatilho agendado"
-    refresh()
-}
-
-/* ══════════════════════════════════════════════════════════════════════════════
- *  COMANDOS PÚBLICOS
- *
- *  refresh()    → envia requisição de status (DP_QUERY) ao device.
- *  disconnect() → fecha o socket TCP manualmente (útil para debug).
- * ══════════════════════════════════════════════════════════════════════════════ */
 void refresh() {
-    logDebug "refresh() — solicitando status ao device"
-    tuyaSend("status", [:])
+    Map s = session()
+    // Nem todo firmware expõe os DPs de configuração localmente: pede uma vez por sessão
+    if (!s.configRead && !s.configAsked) {
+        s.configAsked = true
+        enqueue("updatedps")
+    }
+    enqueue("status")
 }
 
 void disconnect() {
-    logDebug "disconnect() — solicitado pelo usuário"
-    unschedule("heartbeat")
-    socketClose()
+    unschedule("reconnect")
+    closeSocket("pedido do usuário")
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
- *  COMANDOS DE ESCRITA DE DPS
- *
- *  Cada comando converte o valor para o formato raw exigido pelo protocolo Tuya
- *  e envia via tuyaSend("set", ...).
- *
- *  Regras de escala:
- *    • Percentuais (upperLimit / lowerLimit): inteiro 0..100, sem escala.
- *    • Alturas em metros (installationHeight / liquidDepthMax): scale=3,
- *      ou seja, 1,500 m → raw 1500. Hardware limita: 100..3000 / 100..2900.
- * ══════════════════════════════════════════════════════════════════════════════ */
-
-/** Define o limite superior de alarme (DPS 101, max_set) */
 void setUpperLimit(Number pct) {
-    Integer v = safeIntClamped(pct, 0, 100, "setUpperLimit")
-    logDebug "setUpperLimit(${pct}) → DPS ${DPS_UPPER_LIMIT} = ${v}"
-    tuyaSend("set", [(DPS_UPPER_LIMIT): v])
+    enqueue("set", [(DP_UPPER_LIMIT): clampInt(pct, 0, 100)])
 }
 
-/** Define o limite inferior de alarme (DPS 102, mini_set) */
 void setLowerLimit(Number pct) {
-    Integer v = safeIntClamped(pct, 0, 100, "setLowerLimit")
-    logDebug "setLowerLimit(${pct}) → DPS ${DPS_LOWER_LIMIT} = ${v}"
-    tuyaSend("set", [(DPS_LOWER_LIMIT): v])
+    enqueue("set", [(DP_LOWER_LIMIT): clampInt(pct, 0, 100)])
 }
 
-/**
- * Define a altura de instalação do sensor (DPS 104, installation_height).
- * scale=3 → raw = metros × 1000. Faixa válida: 0,100..3,000 m (raw 100..3000).
- */
 void setInstallationHeight(Number meters) {
-    Integer raw = metersToScaledInt(meters, 3, 100, 3000)
-    logDebug "setInstallationHeight(${meters}m) → DPS ${DPS_INSTALL_HEIGHT} raw=${raw}"
-    tuyaSend("set", [(DPS_INSTALL_HEIGHT): raw])
+    enqueue("set", [(DP_INSTALL_HEIGHT): clampInt((meters ?: 0) * 1000, 100, 3000)])
 }
 
-/**
- * Define a profundidade máxima do tanque (DPS 106, liquid_depth_max).
- * scale=3 → raw = metros × 1000. Faixa válida: 0,100..2,900 m (raw 100..2900).
- */
 void setLiquidDepthMax(Number meters) {
-    Integer raw = metersToScaledInt(meters, 3, 100, 2900)
-    logDebug "setLiquidDepthMax(${meters}m) → DPS ${DPS_DEPTH_MAX} raw=${raw}"
-    tuyaSend("set", [(DPS_DEPTH_MAX): raw])
+    enqueue("set", [(DP_DEPTH_MAX): clampInt((meters ?: 0) * 1000, 100, 2900)])
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
- *  COMANDOS DE CALIBRAÇÃO
- *
- *  Derivam o valor a ser gravado no device a partir dos atributos já lidos,
- *  evitando que o usuário precise digitar o valor manualmente.
- *  Todos verificam se o atributo fonte está disponível antes de prosseguir.
- * ══════════════════════════════════════════════════════════════════════════════ */
-
-/** Grava max_set com o nível atual lido → define o ponto de "tanque cheio" */
 void calibSetUpperFromCurrentLevel() {
     Integer lvl = currentInteger("level")
-    if (lvl == null) { log.warn "[${device.displayName}] Sem level atual para calibrar limite superior."; return }
+    if (lvl == null) { log.warn "[${device.displayName}] Sem leitura de nível para calibrar"; return }
     setUpperLimit(lvl)
 }
 
-/** Grava mini_set com o nível atual lido → define o ponto de "tanque vazio" */
 void calibSetLowerFromCurrentLevel() {
     Integer lvl = currentInteger("level")
-    if (lvl == null) { log.warn "[${device.displayName}] Sem level atual para calibrar limite inferior."; return }
+    if (lvl == null) { log.warn "[${device.displayName}] Sem leitura de nível para calibrar"; return }
     setLowerLimit(lvl)
 }
 
-/** Grava liquid_depth_max com a profundidade atual lida (liquidDepthCm → metros) */
 void calibSetDepthMaxFromCurrentDepth() {
     Integer cm = currentInteger("liquidDepthCm")
-    if (cm == null) { log.warn "[${device.displayName}] Sem liquidDepthCm atual para calibrar."; return }
-    setLiquidDepthMax((cm as BigDecimal) / 100G)
+    if (cm == null) { log.warn "[${device.displayName}] Sem leitura de profundidade para calibrar"; return }
+    setLiquidDepthMax(cm / 100G)
 }
 
-/** Copia installationHeight para liquid_depth_max (útil quando tanque está cheio) */
 void calibSetDepthMaxFromInstallationHeight() {
     BigDecimal h = currentDecimal("installationHeight")
-    if (h == null) { log.warn "[${device.displayName}] Sem installationHeight atual para calibrar."; return }
+    if (h == null) { log.warn "[${device.displayName}] installationHeight ainda não lido"; return }
     setLiquidDepthMax(h)
 }
 
-/** Copia liquidDepthMax para installation_height (sincronização inversa) */
 void calibSetInstallationHeightFromDepthMax() {
     BigDecimal mx = currentDecimal("liquidDepthMax")
-    if (mx == null) { log.warn "[${device.displayName}] Sem liquidDepthMax atual para calibrar."; return }
+    if (mx == null) { log.warn "[${device.displayName}] liquidDepthMax ainda não lido"; return }
     setInstallationHeight(mx)
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
- *  SOCKET TCP — GERENCIAMENTO DE CONEXÃO
- *
- *  socketConnect() → abre o socket TCP para o device na porta 6668.
- *                    Resolve hostname → IP antes de conectar.
- *  socketStatus()  → callback do Hubitat para eventos do socket (erro, desconexão).
- *                    Dispara auto-reconexão se configurado.
- *  socketWrite()   → serializa byte[] para hex e envia pelo socket.
- *  socketClose()   → fecha o socket e limpa estado da sessão.
- *  resolveHost()   → converte hostname para IP via DNS (InetAddress),
- *                    retorna o hostname original como fallback se falhar.
- * ══════════════════════════════════════════════════════════════════════════════ */
+/* ── Sessão e conexão ─────────────────────────────────────────────────────── */
 
-/** Abre a conexão TCP com o device. Retorna true em caso de sucesso. */
-private boolean socketConnect() {
-    String host = resolveHost()
-    if (!host) {
-        log.error "[${device.displayName}] Não foi possível resolver o host: ${settings.deviceHost}"
-        return false
+private Map session() {
+    Long id = device.id as Long
+    Map s = SESSIONS[id]
+    if (s == null) {
+        s = [buf: "", ready: false, connecting: false, seq: 1, queue: [], key: null,
+             localNonce: null, configRead: false, failures: 0]
+        SESSIONS[id] = s
     }
-    logDebug "Conectando a ${host}:${TUYA_PORT}"
-    try {
-        // byteInterface: true → recebe dados como hex string em parse()
-        // readDelay: 150ms → janela de acumulação de fragmentos TCP antes de entregar ao parse()
-        interfaces.rawSocket.connect(host, TUYA_PORT,
-            byteInterface: true,
-            readDelay: 150)
-        return true
-    } catch (java.net.NoRouteToHostException e) {
-        log.error "[${device.displayName}] Sem rota para o host ${host}: ${e.message}"
-    } catch (java.net.SocketTimeoutException e) {
-        log.error "[${device.displayName}] Timeout ao conectar em ${host}: ${e.message}"
-    } catch (e) {
-        log.error "[${device.displayName}] Erro ao conectar socket: ${e}"
-    }
-    return false
+    return s
 }
 
-/**
- * Callback invocado pelo Hubitat quando há um evento no socket (erro ou desconexão).
- * "Broken pipe" → erro de escrita → fecha imediatamente.
- * "disconnect"  → socket foi fechado pelo device ou pela rede → tenta reconectar
- *                 se autoReconnect estiver habilitado.
- */
-void socketStatus(String msg) {
-    logDebug "socketStatus: ${msg}"
+private String ver() { tuyaProtVersion ?: "35" }
 
-    if (msg.contains("Broken pipe") || msg.contains("send error")) {
-        unschedule("heartbeat")
-        socketClose()
+private byte[] realKey() { (localKey ?: "").replaceAll("&lt;", "<").getBytes("UTF-8") }
+
+private byte[] activeKey() {
+    Map s = session()
+    return (ver() != "33" && s.key != null) ? (byte[]) s.key : realKey()
+}
+
+private void enqueue(String kind, Map dps = null) {
+    Map s = session()
+    s.queue << [kind: kind, dps: dps]
+    if (s.ready) {
+        flushQueue()
+    } else if (!s.connecting) {
+        openSocket()
+    }
+}
+
+private void openSocket() {
+    Map s = session()
+    if (!deviceHost || !deviceId || realKey().length != 16) {
+        log.error "[${device.displayName}] Preencha IP, Device ID e uma Local Key de 16 caracteres"
+        s.queue.clear()
         return
     }
-
-    if (msg.contains("disconnect")) {
-        unschedule("heartbeat")
-        boolean doReconnect = (settings?.autoReconnect != false)
-        socketClose(doReconnect)
-        if (doReconnect) {
-            logDebug "Auto-reconectando..."
-            boolean ok = tuyaGetSession()
-            if (!ok) sendEvent(name: "presence", value: "not present")
-            state.HaveSession = ok
-        }
-    }
-}
-
-/** Serializa o payload byte[] para hex string e envia pelo socket raw. */
-private void socketWrite(byte[] message) {
-    String hex = HexUtils.byteArrayToHexString(message)
-    logDebug "socketWrite → ${hex}"
+    s.connecting = true
+    s.ready = false
+    s.key = null
+    s.buf = ""
+    s.seq = 1
+    s.configAsked = s.queue.any { it.kind == "updatedps" }
     try {
-        interfaces.rawSocket.sendMessage(hex)
+        logDebug "Conectando a ${deviceHost}:${TUYA_PORT} (v${ver()})"
+        interfaces.rawSocket.connect(deviceHost, TUYA_PORT, byteInterface: true, readDelay: 150)
     } catch (e) {
-        log.error "[${device.displayName}] Erro ao escrever no socket: ${e}"
-        socketClose()
+        connectionFailed("falha ao conectar: ${e.message}")
+        return
     }
-}
-
-/**
- * Fecha o socket TCP e limpa o estado de sessão.
- * Se willReconnect=false, emite presence "not present" imediatamente.
- */
-private void socketClose(boolean willReconnect = false) {
-    logDebug "socketClose (willReconnect=${willReconnect})"
-    unschedule("sendTimeout")
-    if (!willReconnect) sendEvent(name: "presence", value: "not present")
-    // Limpa estado da sessão para forçar nova negociação no próximo connect
-    state.session_step = "step1"
-    state.HaveSession  = false
-    state.sessionKey   = null
-    try { interfaces.rawSocket.close() } catch (ignored) {}
-}
-
-/**
- * Resolve hostname para IP usando DNS (InetAddress).
- * Se o valor já for um IP (regex IPv4), retorna diretamente.
- * Em caso de falha de DNS, retorna o hostname original — a pilha TCP
- * tentará resolver por conta própria (mDNS / etc.).
- */
-private String resolveHost() {
-    String h = (settings?.deviceHost ?: "").trim()
-    if (!h) return null
-    // Verifica se já é um endereço IPv4 válido
-    if (h ==~ /^\d{1,3}(\.\d{1,3}){3}$/) return h
-    // Tenta resolução DNS
-    try {
-     //   String ip = InetAddress.getByName(h).getHostAddress()
-        logDebug "Hostname '${h}' resolvido para ${ip}"
-        return ip
-    } catch (e) {
-        log.warn "[${device.displayName}] Falha ao resolver DNS de '${h}': ${e.message} — usando hostname diretamente"
-        return h
+    if (ver() == "33") {
+        sessionReady()
+    } else {
+        byte[] nonce = randomBytes(16)
+        s.localNonce = nonce
+        writeFrame(CMD_SESS_KEY_START, nonce, realKey())
     }
+    runIn(10, "responseTimeout")
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
- *  GERENCIAMENTO DE SESSÃO TUYA
- *
- *  tuyaSessionReset() → limpa todo o estado da sessão (chamado em updated/configure).
- *  tuyaGetSession()   → abre o socket e, para v3.4, inicia negociação de chave.
- *                       Retorna true quando a sessão está pronta para uso.
- *                       Para v3.4, retorna false imediatamente pois a negociação
- *                       é assíncrona (completada em parse() ao receber KEY_RESP).
- *  heartbeat()        → envia keepalive e agenda reconexão forçada em 30s
- *                       (caso o ack não chegue, socketStatus detecta o timeout).
- *  tuyaSend()         → ponto de entrada único para envio de comandos. Abre sessão
- *                       se necessário, serializa o payload e arma timer de retry.
- *  sendAll()          → reenvio do comando pendente (chamado após sessão pronta em v3.4).
- *  sendTimeout()      → disparado pelo timer; decrementa retries até fechar o socket.
- * ══════════════════════════════════════════════════════════════════════════════ */
-
-/** Zera todo o estado de sessão. Chamado ao salvar preferências. */
-private void tuyaSessionReset() {
-    state.HaveSession  = false
-    state.session_step = "step1"
-    state.sessionKey   = null
-    state.statePayload = [:]
-    state.retry        = MAX_RETRIES
-    state.Msgseq       = 1
+private void sessionReady() {
+    Map s = session()
+    s.ready = true
+    s.connecting = false
+    s.failures = 0
+    if (device.currentValue("presence") != "present") sendEvent(name: "presence", value: "present")
+    logDebug "Sessão pronta"
+    flushQueue()
+    if (persistent != false) runIn(20, "heartbeat")
 }
 
-/**
- * Abre o socket e inicia a sessão Tuya.
- *   v3.1 / v3.3 → sem handshake; sessão pronta imediatamente após connect.
- *   v3.4        → envia KEY_START; sessão ficará pronta quando parse() receber
- *                 KEY_RESP e completar a negociação de chave de sessão.
- * Retorna true apenas quando a sessão está imediatamente disponível (v3.1/3.3).
- */
-private boolean tuyaGetSession() {
-    if (!socketConnect()) return false
-
-    String ver = settings?.tuyaProtVersion ?: "33"
-    if (ver == "34") {
-        // v3.4: envia step 1 da negociação de chave — resposta assíncrona em parse()
-        state.session_step = "step1"
-        socketWrite(buildKeyStartMessage())
-        return false  // sessão ainda não está pronta
+private void flushQueue() {
+    Map s = session()
+    while (s.queue) {
+        Map item = s.queue.remove(0)
+        sendRequest(item.kind as String, item.dps as Map)
     }
-
-    // v3.1 / v3.3: sem handshake, sessão pronta imediatamente
-    state.HaveSession = true
-    sendEvent(name: "presence", value: "present")
-    return true
+    runIn(10, "responseTimeout")
 }
 
-/**
- * Envia um heartbeat ao device e agenda reconexão forçada em 30s.
- * Se o ack do heartbeat chegar (handleFrame FT_HEARTBEAT), o timer é cancelado
- * e um novo heartbeat é agendado em 18s. Se não chegar, socketStatus fecha o socket.
- */
 void heartbeat() {
-    logDebug "heartbeat()"
-    tuyaSend("hb")
-    runIn(30, "socketStatus", [data: "disconnect: ciclo de reconexão forçado"])
+    Map s = session()
+    if (!s.ready) return
+    sendRequest("hb")
+    runIn(10, "responseTimeout")
+    runIn(20, "heartbeat")
 }
 
-/**
- * Ponto de entrada único para envio de qualquer comando ao device.
- * Abre sessão automaticamente se não houver uma ativa.
- * Arma um timer de SEND_TIMEOUT_MS para retry automático.
- */
-private void tuyaSend(String command, Map data = null) {
-    // Guarda comando pendente para retry em caso de timeout ou reconexão v3.4
-    fPendingCommand = command
-    fPendingMessage = data ?: [:]
-
-    if (!state.HaveSession) {
-        logDebug "Sem sessão ativa — abrindo conexão"
-        state.HaveSession = tuyaGetSession()
+void responseTimeout() {
+    if (session().connecting) {
+        log.warn "[${device.displayName}] O sensor não completou a sessão. Confira a Local Key e a versão do protocolo."
     }
-
-    if (state.HaveSession) {
-        socketWrite(buildPayload(command, data))
-        runInMillis(SEND_TIMEOUT_MS, "sendTimeout")
-    }
-    // Se HaveSession ainda false (v3.4 aguardando KEY_RESP), sendAll() será
-    // chamado pelo handleFrame quando a negociação completar.
+    connectionFailed("sem resposta do sensor")
 }
 
-/** Reenvia o comando pendente. Chamado após negociação de sessão v3.4 ou em retry. */
-void sendAll() {
-    if (fPendingCommand) tuyaSend(fPendingCommand, fPendingMessage)
+void reconnect() {
+    if (!session().ready && !session().connecting) refresh()
 }
 
-/**
- * Timer de resposta. Decrementa retries e reenvia ou fecha o socket.
- * Chamado automaticamente pelo Hubitat após SEND_TIMEOUT_MS sem resposta.
- */
-void sendTimeout() {
-    Integer retries = (state.retry ?: 0) as Integer
-    if (retries > 0) {
-        log.warn "[${device.displayName}] Sem resposta do device, tentando novamente... (${retries} restante(s))"
-        state.retry = retries - 1
-        sendAll()
-    } else {
-        log.error "[${device.displayName}] Sem resposta após ${MAX_RETRIES} tentativas — fechando socket"
-        socketClose()
+private void connectionFailed(String reason) {
+    Map s = session()
+    s.failures = (s.failures ?: 0) + 1
+    closeSocket(reason)
+    if (persistent != false) {
+        Integer wait = Math.min(30 * (s.failures as Integer), 300)
+        logDebug "Nova tentativa em ${wait}s"
+        runIn(wait, "reconnect")
     }
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
- *  PARSER DE DADOS RECEBIDOS
- *
- *  parse(String rawHex) → callback do Hubitat ao receber dados do socket.
- *                         O Hubitat entrega os bytes como string hexadecimal.
- *                         Um único TCP segment pode conter múltiplos frames Tuya
- *                         (cada um delimitado por TUYA_PREFIX/TUYA_SUFFIX),
- *                         então parseAllFrames() itera sobre todos.
- *
- *  parseAllFrames()     → localiza todos os frames no hex recebido, usando o
- *                         magic prefix "000055AA" como marcador de início.
- *                         Proteção contra loop infinito via guard counter.
- *
- *  decodeFrame()        → decodifica um frame individual:
- *                         1. Extrai tipo e tamanho do cabeçalho (bytes 11 e 15)
- *                         2. Determina offset e tamanho do payload conforme versão
- *                         3. Detecta se o payload é plaintext (começa com '{') ou cifrado
- *                         4. Decifra se necessário e extrai o JSON com os DPS
- *                         5. Retorna Map com: tipo, texto raw, mapa dps, resposta completa
- *
- *  handleFrame()        → despacha cada frame decodificado para o handler correto:
- *                         FT_KEY_RESP     → completa negociação de sessão v3.4
- *                         FT_HEARTBEAT    → renova timer de keepalive
- *                         FT_STATUS_RESP / FT_DP_QUERY* → processa DPS via processDps()
- * ══════════════════════════════════════════════════════════════════════════════ */
-
-/**
- * Callback do Hubitat: recebe hex bruto do socket e distribui frames para handleFrame().
- * Cancela o timer de sendTimeout e reseta o contador de retries a cada resposta recebida.
- */
-void parse(String rawHex) {
-    logDebug "parse() hex recebido: ${rawHex}"
-    unschedule("sendTimeout")
-    state.retry = MAX_RETRIES
-
-    List<Map> frames = parseAllFrames(rawHex)
-    frames.each { Map frame -> handleFrame(frame) }
+private void closeSocket(String reason) {
+    Map s = session()
+    unschedule("heartbeat")
+    unschedule("responseTimeout")
+    if (s.ready || s.connecting) logDebug "Fechando conexão: ${reason}"
+    s.ready = false
+    s.connecting = false
+    s.key = null
+    s.buf = ""
+    try { interfaces.rawSocket.close() } catch (ignored) { }
+    if (device.currentValue("presence") != "not present") {
+        sendEvent(name: "presence", value: "not present", descriptionText: reason)
+    }
 }
 
-/**
- * Localiza e decodifica todos os frames Tuya presentes no hex recebido.
- * Um único pacote TCP pode conter múltiplos frames concatenados.
- * Guard counter (50) previne loop infinito em dados malformados.
- */
-private List<Map> parseAllFrames(String hex) {
-    List<Map> results = []
-    int pos = 0, guard = 50
-
-    while (guard-- > 0) {
-        int idx = hex.indexOf(TUYA_PREFIX, pos)
-        if (idx == -1) break
-        pos = idx + 1  // avança para encontrar próximo frame
-
-        byte[] raw = HexUtils.hexStringToByteArray(hex)
-        Map frame  = decodeFrame(raw, (idx / 2) as Integer)
-        if (frame) results << frame
+void socketStatus(String msg) {
+    logDebug "socketStatus: ${msg}"
+    if (msg.contains("error") || msg.contains("disconnect") || msg.contains("Broken pipe")) {
+        if (session().ready || session().connecting) connectionFailed(msg)
     }
-    return results
 }
 
-/**
- * Decodifica um único frame Tuya a partir do offset sofIndex (em bytes).
- *
- * Estrutura de um frame Tuya (bytes):
- *   [0..3]   Prefixo 0x000055AA
- *   [4..7]   Reservado / versão (ignorado)
- *   [8..11]  Número de sequência
- *   [11]     Tipo do frame (FT_*)
- *   [12..15] Comprimento do payload (incluindo checksum e sufixo)
- *   [16..]   Payload (cifrado ou plaintext)
- *   [end-4]  CRC32 (v3.1/v3.3) ou HMAC-SHA256 últimos 32B (v3.4)
- *   [end]    Sufixo 0x0000AA55
- *
- * Retorna Map com: type, raw (texto decifrado), dps (Map), full (Map completo)
- * ou null para frames ignorados / inválidos.
- */
-private Map decodeFrame(byte[] raw, Integer sofIndex) {
-    if (raw.size() < sofIndex + 20) return null
+/* ── Envio ─────────────────────────────────────────────────────────────────── */
 
-    Integer frameType   = Byte.toUnsignedInt(raw[sofIndex + 11])
-    Integer frameLength = Byte.toUnsignedInt(raw[sofIndex + 15])
-    String  ver         = settings?.tuyaProtVersion ?: "33"
+private void sendRequest(String kind, Map dps = null) {
+    String v = ver()
+    String devId = deviceId
+    String ts = (now().intdiv(1000L)).toString()
+    Integer cmd
+    Map body
 
-    logDebug "decodeFrame sofIndex=${sofIndex} tipo=${frameType} len=${frameLength}"
-
-    // CONTROL/CONTROL_NEW são confirmações de escrita — sem payload útil, ignorar
-    if (frameType in [FT_CONTROL, FT_CONTROL_NEW]) return null
-
-    // Escolhe a chave de decifragem:
-    //   sessionKey → presente apenas em v3.4 após negociação bem-sucedida
-    //   localKey   → usada em v3.1/v3.3 e durante a negociação v3.4
-    byte[] useKey = (state.sessionKey != null)
-        ? (state.sessionKey as byte[])
-        : getRealLocalKey()
-
-    // Tamanho do checksum varia por versão:
-    //   v3.1 / v3.3 → CRC32 = 4 bytes
-    //   v3.4        → HMAC-SHA256 = 32 bytes
-    Integer checksumSize  = (ver == "34") ? 32 : 4
-    Integer payloadStart, payloadLength
-
-    // Calcula offset e tamanho do payload dependendo do tipo de frame e versão
-    switch (frameType) {
-        case FT_KEY_RESP:
-            // KEY_RESP sempre usa a localKey pura, não a sessionKey ainda em negociação
-            payloadStart  = 20
-            payloadLength = frameLength - checksumSize - 8
-            useKey = getRealLocalKey()
-            break
-        case FT_STATUS_RESP:
-            // Versões têm cabeçalhos de tamanhos diferentes antes do payload JSON
-            if (ver == "31") {
-                payloadStart  = 39   // 20B header + 16B MD5 + 3B versão
-                payloadLength = frameLength - checksumSize - 31
-            } else if (ver == "33") {
-                payloadStart  = 35   // 20B header + 12B zeros + 3B versão
-                payloadLength = frameLength - checksumSize - 19 - 4
-            } else {
-                payloadStart  = 20
-                payloadLength = frameLength - checksumSize - 8
-            }
-            break
-        default:
-            payloadStart  = 20
-            payloadLength = frameLength - checksumSize - 8
-    }
-
-    if (payloadLength <= 0) return [type: frameType, dps: [:]]
-
-    // Tenta identificar se o payload é plaintext JSON (começa com '{')
-    // ou se está cifrado (AES-128-ECB)
-    String plainText = ""
-    if (raw.size() > sofIndex + payloadStart &&
-        raw[sofIndex + payloadStart] == (byte)'{') {
-        // Plaintext: converte diretamente para String
-        plainText = new String(raw, sofIndex + payloadStart, payloadLength, "UTF-8")
-        logDebug "Payload plaintext: ${plainText}"
-    } else {
-        // Cifrado: decifra com a chave correta
-        // v3.1 usa Base64 antes do AES; v3.3 e v3.4 usam AES direto
-        plainText = decryptPayload(raw, useKey, sofIndex + payloadStart, payloadLength, ver == "31")
-        logDebug "Payload decifrado: ${plainText}"
-    }
-
-    // Extrai o mapa de DPS do JSON decifrado (se presente)
-    Map status = [:]
-    if (plainText?.contains("dps")) {
-        try {
-            Map parsed = new JsonSlurper().parseText(plainText.substring(plainText.indexOf('{')))
-            // v3.4 STATUS_RESP encapsula os DPS dentro de "data": { "dps": {...} }
-            status = (ver == "34" && frameType == FT_STATUS_RESP && parsed.containsKey("data"))
-                     ? parsed["data"]
-                     : parsed
-        } catch (e) {
-            logDebug "Erro ao parsear JSON: ${e.message}"
-        }
-    }
-
-    return [type: frameType, raw: plainText, dps: status?.dps ?: [:], full: status]
-}
-
-/**
- * Dispatcher de frames: roteia cada frame decodificado para o handler correto.
- *
- *   FT_KEY_RESP     → step 2/3 da negociação de chave v3.4. Após completar,
- *                     emite presence "present" e chama sendAll() para enviar
- *                     o comando que estava pendente desde o início da sessão.
- *   FT_HEARTBEAT    → ack de keepalive; renova o próximo heartbeat em 18s.
- *   FT_STATUS_RESP  → resposta a um set(). Contém DPS atualizados.
- *   FT_DP_QUERY*    → resposta ao refresh(). Contém todos os DPS do device.
- */
-private void handleFrame(Map frame) {
-    if (!frame) return
-    Integer frameType = frame.type as Integer
-
-    switch (frameType) {
-
-        case FT_KEY_RESP:
-            // ── v3.4: Completa a negociação de chave de sessão (step 2 → step 3) ──
-            // O device enviou seu nonce cifrado com a localKey.
-            // Respondemos com HMAC-SHA256 do nonce do device (step 3).
-            // A sessionKey final é calculada como: AES(XOR(localNonce, remoteNonce), localKey)
-            logDebug "KEY_RESP recebido — completando negociação de chave de sessão"
-            unschedule("get_session_timeout")
-            String plainText = frame.raw ?: ""
-            if (plainText.size() >= 16) {
-                def (byte[] finalMsg, byte[] remoteNonce) = decodeIncomingKeyResponse(plainText)
-                state.session_step = "step3"
-                socketWrite(finalMsg)                          // envia KEY_FINAL
-                state.sessionKey   = calculateSessionKey(remoteNonce)
-                state.session_step = "final"
-                state.HaveSession  = true
-                sendEvent(name: "presence", value: "present")
-                logDebug "Chave de sessão negociada com sucesso — enviando comando pendente"
-                runInMillis(100, "sendAll")   // pequena espera antes de enviar
-                // Após sessão pronta: usa heartbeat (v3.4) ou ciclo de reconexão forçada
-                if (settings?.heartbeatEnable) {
-                    runIn(20, "heartbeat")
+    switch (kind) {
+        case "status":
+            if (v == "33") {
+                if (devId.length() == 22) {
+                    // Dispositivos "device22" respondem ao CONTROL_NEW com a lista de DPs
+                    cmd = CMD_CONTROL_NEW
+                    body = [devId: devId, uid: devId, t: ts, dps: [(DP_STATE): null, (DP_DEPTH): null, (DP_LEVEL): null]]
                 } else {
-                    runIn(30, "socketStatus", [data: "disconnect: ciclo de reconexão forçado"])
+                    cmd = CMD_DP_QUERY
+                    body = [gwId: devId, devId: devId, uid: devId, t: ts]
                 }
+            } else {
+                cmd = CMD_DP_QUERY_NEW
+                body = [:]
             }
             break
-
-        case FT_HEARTBEAT:
-            // ── Ack do keepalive recebido → reagenda próximo heartbeat ──
-            logDebug "HEARTBEAT ack recebido"
-            unschedule("socketStatus")   // cancela o timer de reconexão forçada
-            if (settings?.heartbeatEnable) runIn(18, "heartbeat")
+        case "updatedps":
+            cmd = CMD_UPDATEDPS
+            body = [dpId: CONFIG_DPS]
             break
-
-        case FT_STATUS_RESP:
-        case FT_DP_QUERY:
-        case FT_DP_QUERY_NEW:
-            // ── Dados de telemetria recebidos → processa DPS ──
-            fPendingCommand = ""   // comando foi respondido, limpa pendente
-            Map dps = frame.dps ?: [:]
-            if (dps) {
-                logDebug "DPS recebidos: ${dps}"
-                processDps(dps)
-            }
+        case "hb":
+            cmd = CMD_HEART_BEAT
+            body = [gwId: devId, devId: devId]
             break
-
         default:
-            logDebug "Tipo de frame não tratado: ${frameType}"
+            if (v == "33") {
+                cmd = CMD_CONTROL
+                body = [devId: devId, uid: devId, t: ts, dps: dps]
+            } else {
+                cmd = CMD_CONTROL_NEW
+                body = [protocol: 5, t: ts as Long, data: [dps: dps]]
+            }
+    }
+    String json = JsonOutput.toJson(body)
+    logDebug "→ cmd ${cmd} ${json}"
+    writeFrame(cmd, json.getBytes("UTF-8"), activeKey())
+}
+
+private void writeFrame(Integer cmd, byte[] json, byte[] key) {
+    Map s = session()
+    Integer seq = s.seq as Integer
+    s.seq = seq + 1
+    byte[] frame = buildFrame(ver(), cmd, seq, json, key, randomBytes(12))
+    try {
+        interfaces.rawSocket.sendMessage(HexUtils.byteArrayToHexString(frame))
+    } catch (e) {
+        connectionFailed("erro de envio: ${e.message}")
     }
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
- *  PROCESSAMENTO DE DPS → ATRIBUTOS HUBITAT
- *
- *  processDps() → itera sobre cada par chave/valor do mapa DPS recebido,
- *                 converte para a unidade do atributo Hubitat correspondente
- *                 e emite o evento via emitIfChanged().
- *
- *  Conversões de escala aplicadas:
- *    DPS_DEPTH (scale=2):          raw (ex: 125) → metros (1,25) → cm (125)
- *    DPS_INSTALL_HEIGHT (scale=3): raw (ex: 3000) → metros (3,000)
- *    DPS_DEPTH_MAX (scale=3):      raw (ex: 2900) → metros (2,900)
- *
- *  Ao final, recalcula volume se profundidade ou altura mudaram.
- * ══════════════════════════════════════════════════════════════════════════════ */
-private void processDps(Map dps) {
-    boolean touchedLevel  = false   // sinaliza se profundidade/nível mudou
-    boolean touchedHeight = false   // sinaliza se altura de referência mudou
+/**
+ * Monta um frame completo. 3.3: 55AA + CRC32; 3.4: 55AA + HMAC-SHA256;
+ * 3.5: 6699 + AES-GCM, com o cabeçalho a partir do byte 4 como dado autenticado.
+ */
+static byte[] buildFrame(String v, Integer cmd, Integer seq, byte[] payload, byte[] key, byte[] iv) {
+    byte[] header = concat("${v[0]}.${v[1]}".getBytes("UTF-8"), new byte[12])
+    boolean withHeader = !(cmd in NO_VERSION_HEADER)
+    if (v == "35") {
+        byte[] plain = withHeader ? concat(header, payload) : payload
+        byte[] head = concat(hex(PREFIX_6699), concat([0, 0] as byte[],
+                      concat(int4(seq), concat(int4(cmd), int4(12 + plain.length + 16)))))
+        byte[] aad = Arrays.copyOfRange(head, 4, head.length)
+        List gcm = gcmCrypt(key, iv, plain, aad, true)
+        return concat(head, concat(iv, concat((byte[]) gcm[0], concat((byte[]) gcm[1], hex("00009966")))))
+    }
+    byte[] body
+    if (v == "34") {
+        body = aesEcb(key, withHeader ? concat(header, payload) : payload, true)
+    } else {
+        body = aesEcb(key, payload, true)
+        if (withHeader) body = concat(header, body)
+    }
+    Integer trailer = (v == "34") ? 36 : 8
+    byte[] head = concat(hex(PREFIX_55AA), concat(int4(seq), concat(int4(cmd), int4(body.length + trailer))))
+    byte[] data = concat(head, body)
+    byte[] check = (v == "34") ? hmacSha256(key, data) : int4((int) crc32(data))
+    return concat(data, concat(check, hex("0000AA55")))
+}
 
-    dps.each { String k, v ->
-        switch (k) {
+/* ── Recepção ──────────────────────────────────────────────────────────────── */
 
-            case DPS_LEVEL:
-                // Nível em % — inteiro direto, sem conversão de escala
-                Integer pct = safeIntClamped(v, 0, 100, "level")
-                if (emitIfChanged("level", pct, "%")) logDesc "Nível: ${pct}%"
-                touchedLevel = true
-                break
+void parse(String hexData) {
+    Map s = session()
+    s.buf = (s.buf ?: "") + hexData.toUpperCase()
+    while (true) {
+        Map frame = extractFrame(s)
+        if (frame == null) break
+        handleFrame(frame)
+    }
+}
 
-            case DPS_DEPTH:
-                // Device envia metros × 100 (scale=2) como inteiro → convertemos para cm
-                // Ex: valor 125 = 1,25 m = 125 cm
-                BigDecimal depthM = safeBigDecimal(v)
-                if (depthM != null) {
-                    Integer cm = (depthM * 100G).setScale(0, BigDecimal.ROUND_HALF_UP).intValue()
-                    if (emitIfChanged("liquidDepthCm", cm, "cm")) logDesc "Profundidade: ${cm} cm"
-                    touchedLevel = true
-                }
-                break
+/** Retira do buffer o próximo frame completo, ou null se ainda faltam bytes. */
+private Map extractFrame(Map s) {
+    String buf = s.buf
+    int start = findPrefix(buf)
+    if (start < 0) {
+        // Guarda o fim do buffer: o prefixo pode ter chegado partido
+        s.buf = buf.length() > 6 ? buf.substring(buf.length() - 6) : buf
+        return null
+    }
+    buf = buf.substring(start)
+    s.buf = buf
+    byte[] raw = HexUtils.hexStringToByteArray(buf)
+    Map out = decodeFrame(ver(), raw, activeKey())
+    if (out == null) return null
+    s.buf = buf.substring((out.consumed as Integer) * 2)
+    return out
+}
 
-            case DPS_STATE:
-                // Estado de alarme: "normal", "lower_alarm" ou "upper_alarm"
-                String st = v?.toString() ?: "unknown"
-                if (emitIfChanged("liquidState", st, null)) logDesc "Estado: ${st}"
-                break
+private static int findPrefix(String buf) {
+    for (int i = 0; i + 8 <= buf.length(); i += 2) {
+        String p = buf.substring(i, i + 8)
+        if (p == PREFIX_55AA || p == PREFIX_6699) return i
+    }
+    return -1
+}
 
-            case DPS_UPPER_LIMIT:
-                // Limite superior de alarme em % — inteiro direto
-                if (emitIfChanged("upperLimit", safeIntClamped(v, 0, 100, "upperLimit"), "%"))
-                    logDesc "Limite superior: ${v}%"
-                break
-
-            case DPS_LOWER_LIMIT:
-                // Limite inferior de alarme em % — inteiro direto
-                if (emitIfChanged("lowerLimit", safeIntClamped(v, 0, 100, "lowerLimit"), "%"))
-                    logDesc "Limite inferior: ${v}%"
-                break
-
-            case DPS_INSTALL_HEIGHT:
-                // Device envia metros × 1000 (scale=3) → convertemos para metros
-                // Ex: raw 3000 = 3,000 m
-                BigDecimal m = safeBigDecimal(v)
-                if (m != null) {
-                    BigDecimal meters = (m / 1000G).setScale(3, BigDecimal.ROUND_HALF_UP)
-                    if (emitIfChanged("installationHeight", meters, "m"))
-                        logDesc "Altura de instalação: ${meters} m"
-                    touchedHeight = true
-                }
-                break
-
-            case DPS_DEPTH_MAX:
-                // Device envia metros × 1000 (scale=3) → convertemos para metros
-                BigDecimal m = safeBigDecimal(v)
-                if (m != null) {
-                    BigDecimal meters = (m / 1000G).setScale(3, BigDecimal.ROUND_HALF_UP)
-                    if (emitIfChanged("liquidDepthMax", meters, "m"))
-                        logDesc "Profundidade máxima: ${meters} m"
-                    touchedHeight = true
-                }
-                break
-
-            default:
-                // DPS não mapeado — registra em debug para facilitar identificação de novos DPS
-                logDebug "DPS não mapeado: chave=${k} valor=${v}"
+/**
+ * Decodifica um frame no início de raw. Retorna [consumed, cmd, payload] ou null se incompleto.
+ * payload sai já decifrado, sem retcode e sem o cabeçalho "3.x".
+ */
+static Map decodeFrame(String v, byte[] raw, byte[] key) {
+    if (raw.length < 18) return null
+    if (raw[2] == (byte) 0x66) {
+        int len = uint4(raw, 14)
+        if (len < 28 || len > 8192) return [consumed: 4, cmd: -1, error: "tamanho inválido"]
+        int total = 18 + len + 4
+        if (raw.length < total) return null
+        int cmd = uint4(raw, 10)
+        byte[] aad = Arrays.copyOfRange(raw, 4, 18)
+        byte[] iv = Arrays.copyOfRange(raw, 18, 30)
+        byte[] ct = Arrays.copyOfRange(raw, 30, 18 + len - 16)
+        byte[] tag = Arrays.copyOfRange(raw, 18 + len - 16, 18 + len)
+        List gcm = gcmCrypt(key, iv, ct, aad, false)
+        if (!Arrays.equals((byte[]) gcm[1], tag)) return [consumed: total, cmd: cmd, error: "tag GCM inválida"]
+        byte[] plain = (byte[]) gcm[0]
+        if (plain.length >= 4) plain = Arrays.copyOfRange(plain, 4, plain.length)   // retcode
+        return [consumed: total, cmd: cmd, payload: stripVersionHeader(plain)]
+    }
+    int len = uint4(raw, 12)
+    int trailer = (v == "34") ? 36 : 8
+    if (len < trailer || len > 8192) return [consumed: 4, cmd: -1, error: "tamanho inválido"]
+    int total = 16 + len
+    if (raw.length < total) return null
+    int cmd = uint4(raw, 8)
+    int start = 20   // cabeçalho + retcode
+    int end = total - trailer
+    if (end <= start) return [consumed: total, cmd: cmd, payload: new byte[0]]
+    byte[] body = Arrays.copyOfRange(raw, start, end)
+    if (v == "34") {
+        byte[] expected = hmacSha256(key, Arrays.copyOfRange(raw, 0, end))
+        if (!Arrays.equals(expected, Arrays.copyOfRange(raw, end, end + 32))) {
+            return [consumed: total, cmd: cmd, error: "HMAC inválido"]
         }
     }
-
-    // Recalcula volume se algum valor relevante mudou
-    if (enableVolumeCalc && (touchedLevel || touchedHeight)) {
-        recalcVolume()
-    } else {
-        updateTemplate()
+    body = stripVersionHeader(body)
+    if (body.length > 0 && body[0] != (byte) '{') {
+        try {
+            body = stripVersionHeader(aesEcb(key, body, false))
+        } catch (e) {
+            return [consumed: total, cmd: cmd, error: "falha ao decifrar"]
+        }
     }
+    return [consumed: total, cmd: cmd, payload: body]
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
- *  CÁLCULO DE VOLUME
- *
- *  recalcVolume()   → calcula volume atual e capacidade total do tanque.
- *                     Não recebe parâmetros: lê tudo dos atributos e preferências.
- *
- *  Altura utilizável (usableHeightM) é determinada em ordem de prioridade:
- *    1. Preferência "tankUsableHeightM" (override manual)
- *    2. Atributo "liquidDepthMax" (DPS 106 — configurado no device)
- *    3. Atributo "installationHeight" (DPS 104 — altura física do sensor)
- *
- *  computeAreaM2()  → calcula a área da base do tanque em m²:
- *    Retangular:  área = comprimento × largura  (cm convertidos para m)
- *    Cilíndrico:  área = π × (diâmetro/2)²
- *
- *  updateTemplate() → monta a string compacta "tankTemplate" para uso em tiles
- *                     de dashboard. Formato: "75% • 150 cm • 750 L / 1.000 L • 75,0% • normal"
- * ══════════════════════════════════════════════════════════════════════════════ */
-void recalcVolume() {
-    if (!enableVolumeCalc) { updateTemplate(); return }
-
-    Integer depthCm = currentInteger("liquidDepthCm")
-    if (depthCm == null) { updateTemplate(); return }
-    BigDecimal depthM = (depthCm as BigDecimal) / 100G
-
-    // Determina altura útil: override manual > liquidDepthMax > installationHeight
-    BigDecimal usableHeightM = (settings?.tankUsableHeightM != null)
-        ? safeBigDecimal(settings.tankUsableHeightM) : null
-    if (usableHeightM == null) {
-        BigDecimal mx = currentDecimal("liquidDepthMax")
-        BigDecimal ih = currentDecimal("installationHeight")
-        usableHeightM = (mx != null) ? mx : ih
+private void handleFrame(Map frame) {
+    Map s = session()
+    Integer cmd = frame.cmd as Integer
+    if (frame.error) {
+        log.warn "[${device.displayName}] Frame cmd ${cmd} descartado: ${frame.error}. Confira a Local Key e a versão."
+        return
     }
+    byte[] payload = (byte[]) frame.payload
 
-    BigDecimal areaM2 = computeAreaM2()
-    // Se não temos área ou altura, não é possível calcular — atualiza só o template
-    if (areaM2 == null || areaM2 <= 0G)             { updateTemplate(); return }
-    if (usableHeightM == null || usableHeightM <= 0G) { updateTemplate(); return }
+    if (cmd == CMD_SESS_KEY_RESP) {
+        finishNegotiation(payload)
+        return
+    }
+    unschedule("responseTimeout")
+    s.failures = 0
+    if (cmd == CMD_HEART_BEAT) return
 
-    // Limita a profundidade medida ao intervalo físico válido [0..usableHeightM]
-    BigDecimal d    = depthM.max(0G).min(usableHeightM)
-    // Capacidade total = área × altura total × 1000 (m³ → L)
-    BigDecimal capL = areaM2 * usableHeightM * 1000G
-    // Volume atual    = área × profundidade atual × 1000 (m³ → L)
-    BigDecimal volL = areaM2 * d * 1000G
-    // Percentual de ocupação com 1 casa decimal
-    BigDecimal pct  = (capL > 0G) ? (volL / capL * 100G) : 0G
-    pct = pct.setScale(1, BigDecimal.ROUND_HALF_UP)
+    String text = new String(payload, "UTF-8").trim()
+    logDebug "← cmd ${cmd} ${text}"
+    if (!text.startsWith("{")) {
+        if (text.contains("data unvalid")) log.warn "[${device.displayName}] O sensor recusou a consulta: ${text}"
+        closeIfOneShot()
+        return
+    }
+    Map json
+    try {
+        json = (Map) new JsonSlurper().parseText(text)
+    } catch (e) {
+        logDebug "JSON inválido: ${e.message}"
+        return
+    }
+    Map dps = (json.dps ?: json.data?.dps) as Map
+    if (dps) processDps(dps)
+    closeIfOneShot()
+}
 
-    // Aplica arredondamento configurável ao volume
-    Integer step      = safeIntClamped(settings?.roundVolumeLiters, 1, 100000, "roundVolumeLiters")
-    BigDecimal volRnd = roundToStep(volL, step)
+private void closeIfOneShot() {
+    if (persistent == false && !session().queue) runIn(3, "disconnect")
+}
 
-    emitIfChanged("tankCapacityLiters",      capL.setScale(0, BigDecimal.ROUND_HALF_UP), null)
-    emitIfChanged("volumeLiters",            volRnd.setScale(0, BigDecimal.ROUND_HALF_UP), "L")
-    emitIfChanged("volumePercentOfCapacity", pct, "%")
+private void finishNegotiation(byte[] payload) {
+    Map s = session()
+    byte[] localNonce = (byte[]) s.localNonce
+    if (payload.length < 48 || localNonce == null) {
+        connectionFailed("resposta de sessão inválida")
+        return
+    }
+    byte[] remoteNonce = Arrays.copyOfRange(payload, 0, 16)
+    byte[] proof = Arrays.copyOfRange(payload, 16, 48)
+    if (!Arrays.equals(proof, hmacSha256(realKey(), localNonce))) {
+        connectionFailed("Local Key não confere")
+        log.error "[${device.displayName}] A Local Key não confere com a do sensor. Ela muda a cada novo pareamento."
+        return
+    }
+    writeFrame(CMD_SESS_KEY_FINISH, hmacSha256(realKey(), remoteNonce), realKey())
+    s.key = sessionKey(ver(), realKey(), localNonce, remoteNonce)
+    sessionReady()
+}
 
-    logDebug "recalcVolume: prof=${depthM}m altUtil=${usableHeightM}m área=${areaM2}m² " +
-             "cap=${capL}L vol=${volL}L arred=${volRnd}L pct=${pct}%"
+/** Chave de sessão: XOR dos nonces cifrado com a Local Key (ECB no 3.4, GCM no 3.5). */
+static byte[] sessionKey(String v, byte[] realKey, byte[] localNonce, byte[] remoteNonce) {
+    byte[] x = new byte[16]
+    for (int i = 0; i < 16; i++) x[i] = (byte) (localNonce[i] ^ remoteNonce[i])
+    if (v == "34") return aesEcb(realKey, x, true, false)
+    return (byte[]) gcmCrypt(realKey, Arrays.copyOf(localNonce, 12), x, new byte[0], true)[0]
+}
+
+private void processDps(Map dps) {
+    boolean touched = false
+    dps.each { k, v ->
+        switch (k as String) {
+            case DP_LEVEL:
+                Integer pct = clampInt(v, 0, 100)
+                if (emit("level", pct, "%")) logDesc "Nível: ${pct}%"
+                touched = true
+                break
+            case DP_DEPTH:
+                Integer cm = clampInt(v, 0, 100000)
+                if (emit("liquidDepthCm", cm, "cm")) logDesc "Coluna d'água: ${cm} cm"
+                touched = true
+                break
+            case DP_STATE:
+                if (emit("liquidState", v as String, null)) logDesc "Estado: ${v}"
+                break
+            case DP_UPPER_LIMIT:
+                session().configRead = true
+                if (emit("upperLimit", clampInt(v, 0, 100), "%")) logDesc "Limite superior: ${v}%"
+                break
+            case DP_LOWER_LIMIT:
+                session().configRead = true
+                if (emit("lowerLimit", clampInt(v, 0, 100), "%")) logDesc "Limite inferior: ${v}%"
+                break
+            case DP_INSTALL_HEIGHT:
+                session().configRead = true
+                BigDecimal ih = (v as BigDecimal) / 1000G
+                if (emit("installationHeight", ih, "m")) logDesc "Altura de instalação: ${ih} m"
+                touched = true
+                break
+            case DP_DEPTH_MAX:
+                session().configRead = true
+                BigDecimal dm = (v as BigDecimal) / 1000G
+                if (emit("liquidDepthMax", dm, "m")) logDesc "Profundidade máxima: ${dm} m"
+                touched = true
+                break
+            default:
+                logDebug "DP sem mapeamento: ${k} = ${v}"
+        }
+    }
+    if (touched) recalcVolume()
+}
+
+/* ── Volume ────────────────────────────────────────────────────────────────── */
+
+void recalcVolume() {
+    if (enableVolumeCalc) {
+        Integer depthCm = currentInteger("liquidDepthCm")
+        BigDecimal height = (tankUsableHeightM != null) ? (tankUsableHeightM as BigDecimal) :
+            (currentDecimal("liquidDepthMax") ?: currentDecimal("installationHeight"))
+        BigDecimal area = areaM2()
+        if (depthCm != null && height && area) {
+            BigDecimal depthM = [[depthCm / 100G, 0G].max(), height].min()
+            BigDecimal capL = area * height * 1000G
+            BigDecimal volL = area * depthM * 1000G
+            Integer step = clampInt(roundVolumeLiters ?: 1, 1, 100000)
+            BigDecimal volRounded = ((volL / step).setScale(0, BigDecimal.ROUND_HALF_UP)) * step
+            emit("tankCapacityLiters", capL.setScale(0, BigDecimal.ROUND_HALF_UP), "L")
+            emit("volumeLiters", volRounded.setScale(0, BigDecimal.ROUND_HALF_UP), "L")
+            emit("volumePercentOfCapacity", (volL / capL * 100G).setScale(1, BigDecimal.ROUND_HALF_UP), "%")
+        }
+    }
     updateTemplate()
 }
 
-/**
- * Calcula a área da base do tanque em m² de acordo com o formato configurado.
- * Retorna null se as dimensões não estiverem configuradas corretamente.
- */
-private BigDecimal computeAreaM2() {
-    String shape = settings?.tankShape ?: "rectangular"
-    switch (shape) {
-        case "rectangular":
-            // Área = comprimento × largura (dimensões em cm, convertidas para m)
-            BigDecimal Lm = cmToM(settings?.tankLengthCm)
-            BigDecimal Wm = cmToM(settings?.tankWidthCm)
-            if (Lm == null || Wm == null) return null
-            return (Lm * Wm).setScale(6, BigDecimal.ROUND_HALF_UP)
-        case "cylVertical":
-            // Área = π × r² (diâmetro em cm, convertido para m, dividido por 2)
-            BigDecimal Dm = cmToM(settings?.tankDiameterCm)
-            if (Dm == null) return null
-            BigDecimal r  = Dm / 2G
-            return ((Math.PI as BigDecimal) * r * r).setScale(6, BigDecimal.ROUND_HALF_UP)
-        default:
-            log.warn "[${device.displayName}] Formato de tanque desconhecido: '${shape}'"
-            return null
+private BigDecimal areaM2() {
+    if (tankShape == "cylVertical") {
+        if (!tankDiameterCm) return null
+        BigDecimal r = (tankDiameterCm as BigDecimal) / 200G
+        return (Math.PI as BigDecimal) * r * r
     }
+    if (!tankLengthCm || !tankWidthCm) return null
+    return (tankLengthCm as BigDecimal) * (tankWidthCm as BigDecimal) / 10000G
 }
 
-/**
- * Atualiza o atributo "tankTemplate" com uma string resumida de todos os dados.
- * Formato exibido: "75% • 150 cm • 750 L / 1.000 L • 75,0% • normal"
- * Valores ausentes são exibidos como "--".
- */
 private void updateTemplate() {
-    Integer    lvl    = currentInteger("level")
-    Integer    depth  = currentInteger("liquidDepthCm")
-    String     st     = (device.currentValue("liquidState") ?: "").toString()
-    BigDecimal vol    = safeBigDecimal(device.currentValue("volumeLiters"))
-    BigDecimal cap    = safeBigDecimal(device.currentValue("tankCapacityLiters"))
-    BigDecimal pctCap = safeBigDecimal(device.currentValue("volumePercentOfCapacity"))
-
-    String t = "${lvl    != null ? lvl    + '%' : '--%'} • "  +
-               "${depth  != null ? depth  + ' cm' : '-- cm'} • " +
-               "${vol    != null ? formatInt(vol)  + ' L' : '-- L'} / " +
-               "${cap    != null ? formatInt(cap)  + ' L' : '-- L'} • " +
-               "${pctCap != null ? pctCap.setScale(1, BigDecimal.ROUND_HALF_UP) + '%' : '--%'} • " +
-               "${st ?: 'unknown'}"
-
-    emitIfChanged("tankTemplate", t, null)
+    def lvl = device.currentValue("level")
+    def depth = device.currentValue("liquidDepthCm")
+    def vol = device.currentValue("volumeLiters")
+    def cap = device.currentValue("tankCapacityLiters")
+    String st = device.currentValue("liquidState") ?: "--"
+    String t = "${lvl ?: '--'}% • ${depth ?: '--'} cm"
+    if (enableVolumeCalc) t += " • ${vol ?: '--'} L / ${cap ?: '--'} L"
+    emit("tankTemplate", t + " • ${st}", null)
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
- *  PROTOCOLO TUYA — CONSTRUÇÃO DE PAYLOAD
- *
- *  buildPayload()   → ponto de entrada; seleciona o builder correto pela versão.
- *                     Aceita parâmetros opcionais para override (usado nos self-tests).
- *                     Monta o corpo JSON dependendo do tipo de comando:
- *                       "status" → só cabeçalhos gwId/devId/uid/t
- *                       "set"    → adiciona "dps" (v3.1/3.3) ou "data.dps" (v3.4)
- *                       "hb"     → corpo vazio "{}"
- *
- *  buildPayload31() → v3.1:
- *                     SET: cifra JSON com AES/Base64, calcula MD5 auth,
- *                          monta "3.1" + 16 chars MD5 + payload Base64
- *                     STATUS: plaintext, wrapped em frame CRC32
- *
- *  buildPayload33() → v3.3:
- *                     SET e STATUS: prefixo "3.3" + 12 bytes zero + payload AES-ECB
- *                     Frame com CRC32
- *
- *  buildPayload34() → v3.4:
- *                     Todos os comandos: payload AES-ECB sem prefixo de versão
- *                     Frame com HMAC-SHA256 (32 bytes) em vez de CRC32
- *
- *  wrapFrame()      → monta o frame completo v3.1/3.3:
- *                     [PREFIX][reservado][seq][tipo][len][payload][CRC32][SUFFIX]
- *
- *  wrapFrameV34()   → monta o frame completo v3.4:
- *                     [PREFIX][reservado][seq][tipo][len][payload][HMAC-SHA256][SUFFIX]
- * ══════════════════════════════════════════════════════════════════════════════ */
+/* ── Criptografia ──────────────────────────────────────────────────────────── */
+
+static byte[] aesEcb(byte[] key, byte[] data, boolean encrypt, boolean pkcs7 = true) {
+    Cipher c = Cipher.getInstance(pkcs7 ? "AES/ECB/PKCS5Padding" : "AES/ECB/NoPadding")
+    c.init(encrypt ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"))
+    return c.doFinal(data)
+}
 
 /**
- * Ponto de entrada para construção de payload.
- * Parâmetros com valores default permitem override para testes.
+ * AES-GCM (tag de 128 bits) montado sobre AES-ECB: CTR a partir de J0+1 e GHASH em GF(2^128).
+ * Retorna [saída, tag]. Na decifragem, a tag devolvida deve ser comparada com a recebida.
  */
-private byte[] buildPayload(String command, Map data = null,
-                             String timestamp = null,
-                             byte[] key       = null,
-                             String devid     = null,
-                             String ver       = null,
-                             Short  seq       = null) {
-    // Resolve defaults: usa sessionKey se disponível (v3.4), senão localKey
-    key   = key   ?: ((state.sessionKey != null) ? (state.sessionKey as byte[]) : getRealLocalKey())
-    devid = devid ?: (settings?.deviceId ?: "")
-    ver   = ver   ?: (settings?.tuyaProtVersion ?: "33")
-    seq   = seq   ?: (getNextSeq() as Short)
-
-    // Monta o corpo JSON base com identificadores do device
-    Map body = [gwId: devid, devId: devid, uid: devid,
-                t: timestamp ?: nowEpochSec()]
-
-    if (command == "status") {
-        // STATUS: apenas os identificadores são suficientes para disparar a resposta
-    } else if (command == "hb") {
-        body = [:]  // heartbeat: corpo vazio
-    } else if (data) {
-        // SET: v3.4 encapsula DPS em "data", v3.1/3.3 coloca direto em "dps"
-        if (ver == "34") {
-            body["data"] = ["dps": data]
-        } else {
-            body["dps"] = data
-        }
+static List gcmCrypt(byte[] key, byte[] iv, byte[] input, byte[] aad, boolean encrypt) {
+    Cipher c = Cipher.getInstance("AES/ECB/NoPadding")
+    c.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"))
+    long[] h = toLongs(c.doFinal(new byte[16]), 0)
+    byte[] j0 = new byte[16]
+    System.arraycopy(iv, 0, j0, 0, 12)
+    j0[15] = 1
+    byte[] counter = Arrays.copyOf(j0, 16)
+    byte[] out = new byte[input.length]
+    for (int off = 0; off < input.length; off += 16) {
+        incrementCounter(counter)
+        byte[] ks = c.doFinal(counter)
+        int n = Math.min(16, input.length - off)
+        for (int i = 0; i < n; i++) out[off + i] = (byte) (input[off + i] ^ ks[i])
     }
+    byte[] cipherText = encrypt ? out : input
+    long[] x = [0L, 0L] as long[]
+    x = ghashBlocks(x, h, aad)
+    x = ghashBlocks(x, h, cipherText)
+    long[] lens = [((long) aad.length) * 8L, ((long) cipherText.length) * 8L] as long[]
+    x = gfMul([x[0] ^ lens[0], x[1] ^ lens[1]] as long[], h)
+    byte[] ekj0 = c.doFinal(j0)
+    byte[] s = fromLongs(x)
+    byte[] tag = new byte[16]
+    for (int i = 0; i < 16; i++) tag[i] = (byte) (s[i] ^ ekj0[i])
+    return [out, tag]
+}
 
-    String jsonStr = (command == "hb") ? "{}" : cleanJson(body)
-    logDebug "buildPayload cmd=${command} ver=${ver} json=${jsonStr}"
+private static long[] ghashBlocks(long[] x, long[] h, byte[] data) {
+    for (int off = 0; off < data.length; off += 16) {
+        byte[] block = new byte[16]
+        System.arraycopy(data, off, block, 0, Math.min(16, data.length - off))
+        long[] b = toLongs(block, 0)
+        x = gfMul([x[0] ^ b[0], x[1] ^ b[1]] as long[], h)
+    }
+    return x
+}
 
-    switch (ver) {
-        case "31": return buildPayload31(command, jsonStr, key, devid, seq)
-        case "33": return buildPayload33(command, jsonStr, key, seq)
-        case "34": return buildPayload34(command, jsonStr, key, seq)
-        default:   return buildPayload33(command, jsonStr, key, seq)
+/** Multiplicação em GF(2^128) com o polinômio do GCM (NIST SP 800-38D, algoritmo 1). */
+private static long[] gfMul(long[] x, long[] y) {
+    long zHi = 0L, zLo = 0L
+    long vHi = y[0], vLo = y[1]
+    long r = 0xE1L << 56
+    for (int i = 0; i < 128; i++) {
+        long bit = (i < 64) ? ((x[0] >>> (63 - i)) & 1L) : ((x[1] >>> (127 - i)) & 1L)
+        if (bit == 1L) { zHi ^= vHi; zLo ^= vLo }
+        boolean lsb = (vLo & 1L) == 1L
+        vLo = (vLo >>> 1) | (vHi << 63)
+        vHi = vHi >>> 1
+        if (lsb) vHi ^= r
+    }
+    return [zHi, zLo] as long[]
+}
+
+private static void incrementCounter(byte[] counter) {
+    for (int i = 15; i >= 12; i--) {
+        counter[i] = (byte) (counter[i] + 1)
+        if (counter[i] != 0) break
     }
 }
 
-/**
- * Constrói payload para protocolo v3.1.
- * SET: cifra JSON com AES/ECB → Base64, calcula MD5 de autenticação,
- *      monta payload como: "3.1" + 16 chars do MD5 (posições 8..23) + ciphertext Base64
- * STATUS: JSON em plaintext direto
- */
-private byte[] buildPayload31(String command, String jsonStr, byte[] key,
-                               String devid, Short seq) {
-    Integer msgType = (command == "status") ? FT_DP_QUERY : FT_CONTROL
-    ByteArrayOutputStream payload = new ByteArrayOutputStream()
-
-    if (command != "status") {
-        // Cifra o JSON e calcula assinatura MD5
-        String encrypted = encryptToBase64(jsonStr.bytes, key)
-        String preMd5    = "data=${encrypted}||lpv=3.1||" + new String(key, "UTF-8")
-        String md5part   = md5hex(preMd5)[8..23]  // 16 chars do meio do MD5
-        payload.write("3.1${md5part}${encrypted}".bytes)
-    } else {
-        payload.write(jsonStr.bytes)  // status em plaintext no v3.1
+private static long[] toLongs(byte[] b, int off) {
+    long hi = 0L, lo = 0L
+    for (int i = 0; i < 8; i++) {
+        hi = (hi << 8) | (b[off + i] & 0xFF)
+        lo = (lo << 8) | (b[off + 8 + i] & 0xFF)
     }
-
-    return wrapFrame(payload.toByteArray(), msgType, seq, false)
+    return [hi, lo] as long[]
 }
 
-/**
- * Constrói payload para protocolo v3.3.
- * Prefixo "3.3" + 12 bytes nulos + payload AES-ECB (ou plaintext para status).
- * Frame com checksum CRC32.
- */
-private byte[] buildPayload33(String command, String jsonStr, byte[] key, Short seq) {
-    Integer msgType = (command == "status") ? FT_DP_QUERY : FT_CONTROL
-    ByteArrayOutputStream buf = new ByteArrayOutputStream()
-    buf.write("3.3".bytes)          // prefixo de versão (3 bytes)
-    buf.write(new byte[12])         // 12 bytes de padding zero
-
-    if (command == "status") {
-        buf.write(jsonStr.bytes)    // status: JSON em plaintext após o prefixo
-    } else {
-        buf.write(encryptBytes(jsonStr.bytes, key))  // set: payload cifrado
+private static byte[] fromLongs(long[] v) {
+    byte[] out = new byte[16]
+    for (int i = 0; i < 8; i++) {
+        out[i] = (byte) (v[0] >>> (56 - 8 * i))
+        out[8 + i] = (byte) (v[1] >>> (56 - 8 * i))
     }
-
-    return wrapFrame(buf.toByteArray(), msgType, seq, false)
+    return out
 }
 
-/**
- * Constrói payload para protocolo v3.4.
- * Todo payload é cifrado com AES-ECB, sem prefixo de versão.
- * Frame usa HMAC-SHA256 em vez de CRC32.
- * Tipos de mensagem diferentes conforme o comando.
- */
-private byte[] buildPayload34(String command, String jsonStr, byte[] key, Short seq) {
-    Integer msgType
-    byte[]  encrypted
-
-    switch (command) {
-        case "status":
-            msgType   = FT_DP_QUERY_NEW                   // consulta de DPS no v3.4
-            encrypted = encryptBytes(jsonStr.bytes, key)
-            break
-        case "hb":
-            msgType   = FT_HEARTBEAT
-            encrypted = encryptBytes("{}".bytes, key)     // corpo vazio cifrado
-            break
-        default:
-            msgType   = FT_CONTROL_NEW                    // set de DPS no v3.4
-            encrypted = encryptBytes(jsonStr.bytes, key)
-    }
-
-    return wrapFrameV34(encrypted, msgType, seq, key)
-}
-
-/**
- * Encapsula payload em frame Tuya v3.1/v3.3 com CRC32.
- *
- * Estrutura gerada:
- *   [PREFIX 4B][reservado 4B][seq 4B][msgType 4B][length 4B][payload][CRC32 4B][SUFFIX 4B]
- *
- * "length" = comprimento do payload + 4B CRC + 4B sufixo = payload.length + 8
- */
-private byte[] wrapFrame(byte[] payload, Integer msgType, Short seq, boolean useCrc32 = false) {
-    ByteArrayOutputStream frame = new ByteArrayOutputStream()
-    frame.write(HexUtils.hexStringToByteArray(TUYA_PREFIX))
-    frame.write(intToBytes4(0))                       // campo reservado
-    frame.write(intToBytes4(seq as Integer))          // número de sequência
-    frame.write(intToBytes4(msgType))                 // tipo da mensagem
-    frame.write(intToBytes4(payload.length + 8))      // tamanho = payload + CRC(4) + suffix(4)
-    frame.write(payload)
-    // CRC32 calculado sobre tudo até aqui (incluindo cabeçalho)
-    frame.write(crc32bytes(frame.toByteArray()))
-    frame.write(HexUtils.hexStringToByteArray(TUYA_SUFFIX))
-    return frame.toByteArray()
-}
-
-/**
- * Encapsula payload em frame Tuya v3.4 com HMAC-SHA256.
- *
- * Estrutura gerada:
- *   [PREFIX 4B][reservado 4B][seq 4B][msgType 4B][length 4B][payload][HMAC-SHA256 32B][SUFFIX 4B]
- *
- * "length" = comprimento do payload + 32B HMAC + 4B sufixo = payload.length + 36
- * O HMAC é calculado sobre toda a mensagem exceto o próprio HMAC e o sufixo.
- */
-private byte[] wrapFrameV34(byte[] payload, Integer msgType, Short seq, byte[] key) {
-    ByteArrayOutputStream frame = new ByteArrayOutputStream()
-    frame.write(HexUtils.hexStringToByteArray(TUYA_PREFIX))
-    frame.write(intToBytes4(0))
-    frame.write(intToBytes4(seq as Integer))
-    frame.write(intToBytes4(msgType))
-    frame.write(intToBytes4(payload.length + 36))     // tamanho = payload + HMAC(32) + suffix(4)
-    frame.write(payload)
-    // HMAC-SHA256 sobre cabeçalho + payload (sem o HMAC e o sufixo)
-    frame.write(hmacSha256(frame.toByteArray(), key))
-    frame.write(HexUtils.hexStringToByteArray(TUYA_SUFFIX))
-    return frame.toByteArray()
-}
-
-/* ══════════════════════════════════════════════════════════════════════════════
- *  PROTOCOLO TUYA v3.4 — NEGOCIAÇÃO DE CHAVE DE SESSÃO
- *
- *  O protocolo v3.4 usa uma chave de sessão efêmera derivada a cada conexão,
- *  ao invés de usar a localKey diretamente para cifrar os dados.
- *  O processo de 3 passos é:
- *
- *  STEP 1 — Hub → Device (KEY_START):
- *    Gera um nonce local aleatório de 16 chars (localNonce).
- *    Cifra o nonce com a localKey (AES-ECB).
- *    Encapsula em frame KEY_START com HMAC da localKey.
- *
- *  STEP 2 — Device → Hub (KEY_RESP):
- *    Device responde com seu próprio nonce (remoteNonce) cifrado com a localKey.
- *    Hub decifra, extrai o remoteNonce.
- *    Hub calcula HMAC-SHA256(localKey, remoteNonce) e envia no KEY_FINAL.
- *
- *  STEP 3 — Hub → Device (KEY_FINAL):
- *    Hub envia o HMAC do remoteNonce como confirmação.
- *    Após este passo, ambos calculam a sessionKey:
- *      sessionKey = AES(XOR(localNonce, remoteNonce), localKey)[0..15]
- *    Todos os frames subsequentes usam a sessionKey para cifrar/decifrar.
- * ══════════════════════════════════════════════════════════════════════════════ */
-
-/**
- * Step 1: Gera e envia o KEY_START com o nonce local cifrado.
- * Salva o localNonce em state para uso posterior no cálculo da sessionKey.
- */
-private byte[] buildKeyStartMessage() {
-    String nonce = generateLocalNonce()
-    state.localNonce = nonce   // salvo para calcular sessionKey no step 3
-    byte[] encNonce = encryptBytes(nonce.bytes, getRealLocalKey())
-    return wrapFrameV34(encNonce, FT_KEY_START, 1 as Short, getRealLocalKey())
-}
-
-/**
- * Step 2: Processa o KEY_RESP do device.
- * Extrai o remoteNonce (primeiros 16 chars do plaintext decifrado).
- * Calcula HMAC-SHA256(localKey, remoteNonce) e monta o KEY_FINAL.
- * Retorna [mensagem KEY_FINAL a enviar, remoteNonce para calcular sessionKey].
- */
-private List decodeIncomingKeyResponse(String plainText) {
-    byte[] remoteNonce = plainText[0..15].bytes  // primeiros 16 chars = nonce do device
-    Mac mac = Mac.getInstance("HmacSHA256")
-    mac.init(new SecretKeySpec(getRealLocalKey(), "HmacSHA256"))
-    mac.update(remoteNonce)
-    byte[] digest   = mac.doFinal()
-    byte[] finalMsg = wrapFrameV34(digest, FT_KEY_FINAL, getNextSeq() as Short, getRealLocalKey())
-    return [finalMsg, remoteNonce]
-}
-
-/**
- * Step 3: Calcula a chave de sessão final.
- * sessionKey = AES-ECB-encrypt(XOR(localNonce, remoteNonce), localKey)[bytes 0..15]
- * A XOR combina os dois nonces; o resultado é cifrado com a localKey;
- * os primeiros 16 bytes do ciphertext formam a sessionKey de 128 bits.
- */
-private byte[] calculateSessionKey(byte[] remoteNonce) {
-    byte[] localNonce = (state.localNonce ?: generateLocalNonce()).bytes
-    // XOR byte a byte dos dois nonces de 16 bytes
-    byte[] xored = new byte[16]
-    (0..15).each { i -> xored[i] = (localNonce[i] ^ remoteNonce[i]) as byte }
-    // Cifra o resultado com a localKey e usa os primeiros 16 bytes
-    String encHex = encryptToHex(xored, getRealLocalKey())
-    return HexUtils.hexStringToByteArray(encHex[0..31])  // [0..31] = primeiros 16 bytes em hex
-}
-
-/**
- * Gera um nonce local aleatório de 16 caracteres ASCII imprimíveis.
- * Usando letras minúsculas e dígitos para compatibilidade máxima.
- */
-private String generateLocalNonce() {
-    String chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-    Random rng   = new Random()
-    return (1..16).collect { chars[rng.nextInt(chars.size())] }.join()
-}
-
-/* ══════════════════════════════════════════════════════════════════════════════
- *  CRIPTOGRAFIA
- *
- *  getRealLocalKey()   → decodifica a localKey das preferências (UTF-8).
- *                        Substitui &lt; por < (escape HTML do Hubitat).
- *
- *  encryptBytes()      → AES-128-ECB com PKCS5Padding, retorna byte[].
- *  encryptToHex()      → idem, retorna hex string (para cálculo de sessionKey).
- *  encryptToBase64()   → idem, retorna Base64 string (usada no protocolo v3.1).
- *
- *  decryptPayload()    → decifra um trecho de raw[] com AES-128-ECB.
- *                        isBase64=true para v3.1 (decodifica Base64 antes de decifrar).
- *
- *  hmacSha256()        → HMAC-SHA256 para assinatura de frames v3.4.
- *  md5hex()            → MD5 para autenticação de SET no protocolo v3.1.
- *  crc32bytes()        → CRC32 big-endian para checksum de frames v3.1/v3.3.
- * ══════════════════════════════════════════════════════════════════════════════ */
-
-/** Obtém a Local Key das preferências como byte[]. Lida com escape HTML do Hubitat. */
-private byte[] getRealLocalKey() {
-    return (settings?.localKey ?: "").replaceAll('&lt;', '<').getBytes("UTF-8")
-}
-
-/** AES-128-ECB encrypt com PKCS5Padding. Retorna byte[] cifrado. */
-private byte[] encryptBytes(byte[] data, byte[] key) {
-    Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding")
-    cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"))
-    return cipher.doFinal(data)
-}
-
-/** AES-128-ECB encrypt. Retorna string hexadecimal (usado no cálculo da sessionKey). */
-private String encryptToHex(byte[] data, byte[] key) {
-    return HexUtils.byteArrayToHexString(encryptBytes(data, key))
-}
-
-/** AES-128-ECB encrypt. Retorna string Base64 (usado no protocolo v3.1). */
-private String encryptToBase64(byte[] data, byte[] key) {
-    return encryptBytes(data, key).encodeBase64().toString()
-}
-
-/**
- * AES-128-ECB decrypt de um trecho de raw[].
- * isBase64=true → decodifica Base64 antes de decifrar (protocolo v3.1).
- * Retorna string vazia em caso de erro (log debug).
- */
-private String decryptPayload(byte[] raw, byte[] key, Integer start, Integer length, boolean isBase64 = false) {
-    ByteArrayOutputStream buf = new ByteArrayOutputStream()
-    (0..<length).each { buf.write(raw[start + it]) }
-    byte[] payload = buf.toByteArray()
-    try {
-        byte[] decoded = isBase64 ? payload.decodeBase64() : payload
-        Cipher cipher  = Cipher.getInstance("AES/ECB/PKCS5Padding")
-        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"))
-        return new String(cipher.doFinal(decoded), "UTF-8")
-    } catch (e) {
-        logDebug "decryptPayload error: ${e.message}"
-        return ""
-    }
-}
-
-/** HMAC-SHA256 para assinatura de frames v3.4. Retorna digest de 32 bytes. */
-private byte[] hmacSha256(byte[] data, byte[] key) {
+static byte[] hmacSha256(byte[] key, byte[] data) {
     Mac mac = Mac.getInstance("HmacSHA256")
     mac.init(new SecretKeySpec(key, "HmacSHA256"))
     return mac.doFinal(data)
 }
 
-/** MD5 hex string do texto fornecido. Usado na autenticação de SET no protocolo v3.1. */
-private String md5hex(String text) {
-    MessageDigest md = MessageDigest.getInstance("MD5")
-    return HexUtils.byteArrayToHexString(md.digest(text.bytes)).toLowerCase()
-}
-
-/** CRC32 em big-endian como byte[4]. Checksum de frames v3.1 e v3.3. */
-private byte[] crc32bytes(byte[] data) {
-  //  java.util.zip.CRC32 crc = new java.util.zip.CRC32()
-    crc.update(data)
-    long v = crc.getValue()
-    return [(byte)((v >> 24) & 0xFF), (byte)((v >> 16) & 0xFF),
-            (byte)((v >> 8)  & 0xFF), (byte)(v         & 0xFF)] as byte[]
-}
-
-/* ══════════════════════════════════════════════════════════════════════════════
- *  HELPERS GERAIS
- * ══════════════════════════════════════════════════════════════════════════════ */
-
-/**
- * Retorna o próximo número de sequência (0..65534, com wrap).
- * Cada frame Tuya enviado recebe um número único para rastreamento.
- */
-private Short getNextSeq() {
-    if (state.Msgseq == null) state.Msgseq = 0
-    state.Msgseq = (state.Msgseq + 1) % 65535
-    return state.Msgseq as Short
-}
-
-/** Retorna o epoch Unix atual em segundos como String (campo "t" dos frames Tuya). */
-private String nowEpochSec() {
-    return (now() / 1000L).toLong().toString()
-}
-
-/** Converte Integer para big-endian byte[4]. Usado na montagem de cabeçalhos de frame. */
-private static byte[] intToBytes4(Integer v) {
-    return [(byte)((v >> 24) & 0xFF), (byte)((v >> 16) & 0xFF),
-            (byte)((v >> 8)  & 0xFF), (byte)(v         & 0xFF)] as byte[]
-}
-
-/**
- * Serializa um Map para JSON compacto no formato esperado pelo protocolo Tuya.
- * JsonBuilder do Groovy adiciona escapes extras que o device rejeita;
- * este método remove os escapes e aspas externas adicionadas pelo JsonOutput.
- */
-private static String cleanJson(Map m) {
-    String j = new JsonBuilder(m).toString()
-    j = JsonOutput.toJson(j).replaceAll("\\\\", "")
-    j = j.replaceFirst('"', '')
-    return j[0..-2]
-}
-
-/* ── Emissão de eventos ──────────────────────────────────────────────────────── */
-/**
- * Emite sendEvent apenas se o valor mudou OU se o último envio foi há mais
- * de minSec segundos (mecanismo anti-spam com staleness guard).
- * Mantém última emissão em state["ev_<name>_val"] e state["ev_<name>_ts"].
- * Retorna true se o evento foi emitido.
- */
-private boolean emitIfChanged(String name, Object value, String unit, Integer minSec = 30) {
-    def  lastVal = state["ev_${name}_val"]
-    Long lastTs  = (state["ev_${name}_ts"] ?: 0L) as Long
-    boolean changed = (lastVal?.toString() != value?.toString())
-    boolean stale   = (now() - lastTs) > (minSec * 1000L)
-    if (changed || stale) {
-        Map evt = [name: name, value: value]
-        if (unit) evt.unit = unit
-        sendEvent(evt)
-        state["ev_${name}_val"] = value?.toString()
-        state["ev_${name}_ts"]  = now()
-        return true
+static long crc32(byte[] data) {
+    long crc = 0xFFFFFFFFL
+    for (byte b : data) {
+        crc ^= (b & 0xFF)
+        for (int k = 0; k < 8; k++) crc = ((crc & 1L) != 0L) ? ((crc >>> 1) ^ 0xEDB88320L) : (crc >>> 1)
     }
-    return false
+    return crc ^ 0xFFFFFFFFL
 }
 
-/* ── Helpers numéricos ───────────────────────────────────────────────────────── */
+/* ── Utilitários ───────────────────────────────────────────────────────────── */
 
-/**
- * Converte o valor para Integer clampado no intervalo [minV..maxV].
- * Retorna minV se o parse falhar.
- */
-private static Integer safeIntClamped(def n, Integer minV, Integer maxV, String ctx = "") {
-    Integer v = minV
-    try {
-        v = (n instanceof Number) ? ((Number)n).intValue() : n.toString().toInteger()
-    } catch (ignored) { return minV }
-    if (v < minV) v = minV
-    else if (v > maxV) v = maxV
-    return v
+private static byte[] stripVersionHeader(byte[] b) {
+    if (b.length >= 15 && b[0] == (byte) '3' && b[1] == (byte) '.' && b[3] != (byte) '{') {
+        return Arrays.copyOfRange(b, 15, b.length)
+    }
+    return b
 }
 
-/** Converte para BigDecimal de forma segura; retorna null se inválido. */
-private static BigDecimal safeBigDecimal(def v) {
-    try { return (v instanceof Number) ? (v as BigDecimal) : new BigDecimal(v.toString()) }
-    catch (ignored) { return null }
+private static byte[] randomBytes(int n) {
+    byte[] b = new byte[n]
+    new Random().nextBytes(b)
+    return b
 }
 
-/** Converte cm para metros; retorna null se o valor for inválido ou zero. */
-private static BigDecimal cmToM(def cm) {
-    BigDecimal v = safeBigDecimal(cm)
-    return (v != null && v > 0G) ? v / 100G : null
+private static byte[] concat(byte[] a, byte[] b) {
+    byte[] out = new byte[a.length + b.length]
+    System.arraycopy(a, 0, out, 0, a.length)
+    System.arraycopy(b, 0, out, a.length, b.length)
+    return out
 }
 
-/**
- * Converte metros para o inteiro raw exigido pelo protocolo Tuya.
- * raw = metros × 10^scale, clampado em [minRaw..maxRaw].
- * Ex: setInstallationHeight(1.5) com scale=3 → raw=1500, clampado em [100..3000]
- */
-private static Integer metersToScaledInt(def meters, int scale, int minRaw, int maxRaw) {
-    BigDecimal m   = safeBigDecimal(meters) ?: 0G
-    Integer raw    = (m * (10 ** scale as BigDecimal)).setScale(0, BigDecimal.ROUND_HALF_UP).intValue()
-    return raw.clamp(minRaw, maxRaw)
+private static byte[] hex(String s) { HexUtils.hexStringToByteArray(s) }
+
+private static byte[] int4(int v) {
+    return [(byte) (v >>> 24), (byte) (v >>> 16), (byte) (v >>> 8), (byte) v] as byte[]
 }
 
-/** Lê atributo do device e retorna como Integer; null se ausente ou inválido. */
+private static int uint4(byte[] b, int off) {
+    return ((b[off] & 0xFF) << 24) | ((b[off + 1] & 0xFF) << 16) | ((b[off + 2] & 0xFF) << 8) | (b[off + 3] & 0xFF)
+}
+
+private static Integer clampInt(def v, int min, int max) {
+    Integer n
+    try { n = (v as BigDecimal).setScale(0, BigDecimal.ROUND_HALF_UP).intValue() } catch (ignored) { return min }
+    return Math.max(min, Math.min(max, n))
+}
+
 private Integer currentInteger(String attr) {
     def v = device.currentValue(attr)
-    if (v == null) return null
-    try { return (v instanceof Number) ? ((Number)v).intValue() : v.toString().toInteger() }
-    catch (ignored) { return null }
+    return (v == null) ? null : clampInt(v, Integer.MIN_VALUE, Integer.MAX_VALUE)
 }
 
-/** Lê atributo do device e retorna como BigDecimal; null se ausente ou inválido. */
 private BigDecimal currentDecimal(String attr) {
     def v = device.currentValue(attr)
-    if (v == null) return null
-    try { return (v instanceof Number) ? (v as BigDecimal) : new BigDecimal(v.toString()) }
-    catch (ignored) { return null }
+    try { return (v == null) ? null : (v as BigDecimal) } catch (ignored) { return null }
 }
 
-/** Arredonda value para o múltiplo mais próximo de step. Sem arredondamento se step ≤ 1. */
-private static BigDecimal roundToStep(BigDecimal value, int step) {
-    if (step <= 1) return value
-    BigDecimal s = step as BigDecimal
-    return ((value / s).setScale(0, BigDecimal.ROUND_HALF_UP)) * s
+private boolean emit(String name, Object value, String unit) {
+    if (device.currentValue(name)?.toString() == value?.toString()) return false
+    Map evt = [name: name, value: value]
+    if (unit) evt.unit = unit
+    sendEvent(evt)
+    return true
 }
 
-/** Formata BigDecimal como inteiro com separador de milhares (ex.: 1.234). */
-private static String formatInt(BigDecimal n) {
-    try { return String.format("%,d", n.setScale(0, BigDecimal.ROUND_HALF_UP).intValue()) }
-    catch (ignored) { return n.toString() }
-}
-
-/* ── Logging ─────────────────────────────────────────────────────────────────── */
-// Todos os métodos de log incluem o displayName do device para facilitar debug
-// em ambientes com múltiplos devices do mesmo tipo.
-private void logDebug(String msg) { if (settings?.logEnable) log.debug "[${device.displayName}] ${msg}" }
-private void logInfo(String msg)  { log.info  "[${device.displayName}] ${msg}" }
-private void logDesc(String msg)  { if (settings?.txtEnable) log.info "[${device.displayName}] ${msg}" }
+private void logDebug(String msg) { if (logEnable) log.debug "[${device.displayName}] ${msg}" }
+private void logInfo(String msg)  { log.info "[${device.displayName}] ${msg}" }
+private void logDesc(String msg)  { if (txtEnable) log.info "[${device.displayName}] ${msg}" }

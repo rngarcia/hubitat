@@ -28,7 +28,7 @@ To install straight from this repository, use **Install → From a URL** with th
 ### Climatização
 | Package | Type | Connection | Manifest |
 |---|---|---|---|
-| [LG ThinQ Connect Air Conditioner](drivers/lg-thinq-ac) | Driver | Cloud | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/lg-thinq-ac/packageManifest.json) |
+| [LG ThinQ Connect Air Conditioner](drivers/lg-thinq-ac) | Child driver | Cloud | Not in HPM yet: needs its parent app |
 
 ### Integrações cloud
 | Package | Type | Connection | Manifest |

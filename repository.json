@@ -39,17 +39,6 @@
       ]
     },
     {
-      "id": "3579a515-5251-4d0d-b9ad-1269df4ef72b",
-      "name": "LG ThinQ Connect Air Conditioner",
-      "category": "Integrations",
-      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/lg-thinq-ac/packageManifest.json",
-      "description": "LG air conditioner driver using the official LG ThinQ Connect API: modes, setpoints, fan speed and swing.",
-      "tags": [
-        "Climate Control",
-        "Cloud"
-      ]
-    },
-    {
       "id": "1db3f6cb-1721-4c66-88aa-0efbc126e5be",
       "name": "Tuya IoT Platform (Cloud)",
       "category": "Integrations",

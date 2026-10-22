@@ -8,6 +8,7 @@ Cada manifest carrega um bloco extra "x-catalog" (ignorado pelo HPM) com:
   - order:       posição dentro do tema
   - description: descrição curta exibida no HPM
   - packageId:   id estável do pacote no repository.json (UUID, nunca mudar)
+  - publish:     false para manter a pasta fora do índice HPM
 
 Uso:  python3 tools/build_repository.py          # regenera repository.json
       python3 tools/build_repository.py --check  # falha se estiver desatualizado (CI)
@@ -40,6 +41,8 @@ def load_manifests():
         for mf in sorted((ROOT / kind).glob("*/packageManifest.json")):
             data = json.loads(mf.read_text(encoding="utf-8"))
             cat = data.get("x-catalog", {})
+            if cat.get("publish") is False:
+                continue  # fora do índice HPM (ex.: depende de app ainda não publicado)
             theme = cat.get("theme", "Outros")
             if theme not in THEMES:
                 sys.exit(f"{mf}: tema desconhecido '{theme}' (adicione em THEMES)")

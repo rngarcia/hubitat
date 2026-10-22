@@ -65,9 +65,6 @@ To install straight from this repository, use **Install → From a URL** with th
 | Package | Version | Drivers | Manifest |
 |---|---|---|---|
 | [Tuya IoT Platform (Cloud)](drivers/tuya-iot-cloud) | 1.0.5 | 4 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-iot-cloud/packageManifest.json) |
-
-### Not in HPM yet
-- [LG ThinQ Connect Air Conditioner](drivers/lg-thinq-ac): not in HPM yet
 <!-- PACKAGES:END -->
 
 ## Layout
@@ -100,11 +97,15 @@ Never change an existing `packageId` or driver `id`: HPM uses them to match inst
 - Every driver declares `importUrl`, so the **Import** button on the driver code page also updates it.
 - Header: name, version and build date, original author (when there is one), modifier, changelog.
 
+## Contributions upstream
+
+LG ThinQ air conditioners: I use and contribute to [jonozzz/hubitat-thinqconnect](https://github.com/jonozzz/hubitat-thinqconnect) instead of keeping a separate driver here.
+
 ## Support
 
 If these drivers are useful to you, you can [buy me a beer](https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD) 🍺. The same link appears in HPM under the author's name.
 
-Tips go toward the drivers I wrote or mostly rewrote; their headers and READMEs carry the link. Drivers derived from someone else's work (Aeon, ZXT-120, ThinQ) credit the original author and have no tip link. The Tuya IoT Cloud parent driver is Jonathan Bradshaw's work with my patches (the component drivers in that package are mine); please consider supporting him directly.
+Tips go toward the drivers I wrote or mostly rewrote; their headers and READMEs carry the link. Drivers derived from someone else's work (Aeon, ZXT-120) credit the original author and have no tip link. The Tuya IoT Cloud parent driver is Jonathan Bradshaw's work with my patches (the component drivers in that package are mine); please consider supporting him directly.
 
 ## License
 

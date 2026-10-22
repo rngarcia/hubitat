@@ -1,7 +1,7 @@
 {
   "packageName": "FusionSolar OpenAPI",
   "author": "Ricardo Nogueira Garcia",
-  "version": "0.1.1",
+  "version": "0.2.1",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-10-21",
   "category": "Integrations",
@@ -10,7 +10,7 @@
     "Solar",
     "Cloud"
   ],
-  "releaseNotes": "v0.1.1: namespace changed from 'fusion' to 'rng'; author and importUrl fixed.",
+  "releaseNotes": "v0.2.1: hub version 0.2.0 published; namespace changed from 'fusion' to 'rng'.",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/fusionsolar#readme",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [

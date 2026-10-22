@@ -1,7 +1,7 @@
 {
   "packageName": "Goldshell BYTE Miner",
   "author": "Ricardo Nogueira Garcia",
-  "version": "3.2.1",
+  "version": "3.5.1",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-10-21",
   "category": "Integrations",
@@ -9,7 +9,7 @@
     "Energy Monitoring",
     "LAN"
   ],
-  "releaseNotes": "v3.2.1: standardized header and importUrl.",
+  "releaseNotes": "v3.5.1: hub version 3.5.0 (EnergyMeter via trapezoidal integration) published with the Card child driver.",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/goldshell-byte#readme",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [
@@ -18,6 +18,13 @@
       "name": "Goldshell BYTE Miner (MCB+CGMiner)",
       "namespace": "rng",
       "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/goldshell-byte/goldshell-byte.groovy",
+      "required": true
+    },
+    {
+      "id": "5639b2cb-ab8a-4bc5-88e0-6dbd87d9440a",
+      "namespace": "rng",
+      "name": "Goldshell BYTE Miner Card",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/goldshell-byte/goldshell-byte-card.groovy",
       "required": true
     }
   ],

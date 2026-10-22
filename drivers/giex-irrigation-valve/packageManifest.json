@@ -1,0 +1,30 @@
+{
+  "packageName": "GiEX Irrigation Valve (sh1btabb)",
+  "author": "Ricardo Nogueira Garcia (based on Krassimir Kossev)",
+  "version": "1.3.1",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "Zigbee",
+    "Irrigation"
+  ],
+  "releaseNotes": "v1.3.1: first release in the rngarcia/hubitat monorepo.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/giex-irrigation-valve#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "16f2a0fb-9a7a-4d95-bdcc-a5a9390e3245",
+      "name": "GiEX Irrigation Valve (sh1btabb)",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/giex-irrigation-valve/giex-irrigation-valve.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Irrigação",
+    "order": 1,
+    "description": "Dedicated Zigbee driver for the GiEX irrigation valve _TZE200_sh1btabb: irrigation timing, water consumed and running totals. Based on kkossev's Tuya Zigbee Valve.",
+    "packageId": "50b2e6c7-e971-490c-b22e-1be2b683756d"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "packageName": "Zemismart SDM02T Energy Meter",
+  "author": "Ricardo Nogueira Garcia",
+  "version": "1.4.2",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "Energy Monitoring",
+    "Zigbee"
+  ],
+  "releaseNotes": "v1.4.2: first release in the rngarcia/hubitat monorepo.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/zemismart-sdm02t#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "a6863ef5-cc2c-4d09-be71-4db8d20064e4",
+      "name": "Zemismart SDM02T 2-Phase Energy Meter",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/zemismart-sdm02t/zemismart-sdm02t.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Energia e solar",
+    "order": 3,
+    "description": "Zigbee driver for the Zemismart SDM02T 2-phase energy meter (Tuya), built from DP sniffing: per-phase voltage, current, power and energy.",
+    "packageId": "27443e18-8ca5-4045-b182-92ee64037a55"
+  }
+}

@@ -1,7 +1,7 @@
 {
   "packageName": "Tuya IoT Platform (Cloud)",
   "author": "Ricardo Nogueira Garcia (based on Jonathan Bradshaw)",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-10-21",
   "category": "Integrations",
@@ -9,7 +9,7 @@
     "Cloud",
     "Tools & Utilities"
   ],
-  "releaseNotes": "v1.0.4: standardized header, MIT credit to Jonathan Bradshaw, importUrl.",
+  "releaseNotes": "v1.0.5: optional component drivers added: tank level monitor, towel warmer with power monitor, air purifier.",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/tuya-iot-cloud#readme",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [
@@ -19,6 +19,27 @@
       "namespace": "rng",
       "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-iot-cloud/tuya-iot-cloud.groovy",
       "required": true
+    },
+    {
+      "id": "7b1d8ce6-78d9-40d6-a36c-8eddf47c69d4",
+      "namespace": "rng",
+      "name": "Tuya Component Tank Level Monitor (Wi-Fi)",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-iot-cloud/tuya-component-tank-level.groovy",
+      "required": false
+    },
+    {
+      "id": "5aa2d966-f039-436c-b448-bc72adaf7dcf",
+      "namespace": "rng",
+      "name": "Tuya Component Towel Warmer with Power Monitor",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-iot-cloud/tuya-component-towel-warmer.groovy",
+      "required": false
+    },
+    {
+      "id": "e5f93bcf-4953-480b-914a-af6e9285057b",
+      "namespace": "rng",
+      "name": "Generic Component Air Purifier (Tuya)",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-iot-cloud/tuya-component-air-purifier.groovy",
+      "required": false
     }
   ],
   "x-catalog": {

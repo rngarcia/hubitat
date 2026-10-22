@@ -1,0 +1,30 @@
+{
+  "packageName": "Heiman HS2WD-E Siren",
+  "author": "Ricardo Nogueira Garcia",
+  "version": "1.0.3",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "Zigbee",
+    "Security"
+  ],
+  "releaseNotes": "v1.0.3: first release in the rngarcia/hubitat monorepo.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/heiman-hs2wd-e-siren#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "07ed3ef9-847f-4edc-8aee-0c2f78b4daaa",
+      "name": "Heiman HS2WD-E Siren",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/heiman-hs2wd-e-siren/heiman-hs2wd-e-siren.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Segurança",
+    "order": 1,
+    "description": "Zigbee driver for the Heiman HS2WD-E siren: alarm, strobe and tone control.",
+    "packageId": "7babc831-66c6-4c43-ba0d-9db97bd6161b"
+  }
+}

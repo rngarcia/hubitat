@@ -1,0 +1,30 @@
+{
+  "packageName": "Tuya Zigbee Water Level Sensor",
+  "author": "Ricardo Nogueira Garcia",
+  "version": "2.12.1",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "Zigbee",
+    "Water"
+  ],
+  "releaseNotes": "v2.12.1: first release in the rngarcia/hubitat monorepo.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/tuya-zigbee-water-level#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "e54d4a90-0a33-4722-817e-d066d2a0401f",
+      "name": "Tuya Zigbee Water Level Sensor",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-zigbee-water-level/tuya-zigbee-water-level.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Água e aquecimento",
+    "order": 2,
+    "description": "Zigbee driver for the Tuya ultrasonic water-tank level sensor (_TZE200_lvkk0hdg): level, distance, water column height.",
+    "packageId": "0674d33c-8a8b-4cf8-98ad-5b7f97f2d5f6"
+  }
+}

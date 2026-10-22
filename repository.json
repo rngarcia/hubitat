@@ -27,6 +27,29 @@
       ]
     },
     {
+      "id": "27443e18-8ca5-4045-b182-92ee64037a55",
+      "name": "Zemismart SDM02T Energy Meter",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/zemismart-sdm02t/packageManifest.json",
+      "description": "Zigbee driver for the Zemismart SDM02T 2-phase energy meter (Tuya), built from DP sniffing: per-phase voltage, current, power and energy.",
+      "tags": [
+        "Energy Monitoring",
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "1b86d6e2-cba2-4cac-8da2-c1494c01ff1f",
+      "name": "FoxESS Cloud OpenAPI",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/foxess-cloud/packageManifest.json",
+      "description": "FoxESS Cloud OpenAPI driver for FoxESS (and WEG) inverters: real-time power, grid state and daily energy.",
+      "tags": [
+        "Energy Monitoring",
+        "Solar",
+        "Cloud"
+      ]
+    },
+    {
       "id": "609d9770-0a90-4d97-a013-10aa07e7eb68",
       "name": "Tholz SmartHeat",
       "category": "Integrations",
@@ -36,6 +59,95 @@
         "Water Heater",
         "Energy Monitoring",
         "LAN"
+      ]
+    },
+    {
+      "id": "0674d33c-8a8b-4cf8-98ad-5b7f97f2d5f6",
+      "name": "Tuya Zigbee Water Level Sensor",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-zigbee-water-level/packageManifest.json",
+      "description": "Zigbee driver for the Tuya ultrasonic water-tank level sensor (_TZE200_lvkk0hdg): level, distance, water column height.",
+      "tags": [
+        "Zigbee",
+        "Water"
+      ]
+    },
+    {
+      "id": "10716275-8ee7-4916-b9dd-db9653d5d5a1",
+      "name": "Remotec ZXT-120 IR Extender",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/remotec-zxt-120/packageManifest.json",
+      "description": "Modified Z-Wave driver for the Remotec ZXT-120 IR extender, used to control air conditioners.",
+      "tags": [
+        "Z-Wave",
+        "Climate Control"
+      ]
+    },
+    {
+      "id": "50b2e6c7-e971-490c-b22e-1be2b683756d",
+      "name": "GiEX Irrigation Valve (sh1btabb)",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/giex-irrigation-valve/packageManifest.json",
+      "description": "Dedicated Zigbee driver for the GiEX irrigation valve _TZE200_sh1btabb: irrigation timing, water consumed and running totals. Based on kkossev's Tuya Zigbee Valve.",
+      "tags": [
+        "Zigbee",
+        "Irrigation"
+      ]
+    },
+    {
+      "id": "b2df0e78-90cd-4595-ac2c-55e3d7408697",
+      "name": "Aeon Smart Dimmer 2nd Edition",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-smart-dimmer-2nd/packageManifest.json",
+      "description": "Z-Wave driver for the Aeon Labs Smart Dimmer 2nd Edition (DSC25), ported from SmartThings' metering dimmer.",
+      "tags": [
+        "Z-Wave",
+        "Lighting",
+        "Energy Monitoring"
+      ]
+    },
+    {
+      "id": "625fbf28-8a56-4fb6-9d7f-4ef0cc32a795",
+      "name": "Aeon Multisensor Gen5",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-multisensor-gen5/packageManifest.json",
+      "description": "Fixed Z-Wave driver for the Aeon Multisensor Gen5 (motion, temperature, humidity, illuminance, battery).",
+      "tags": [
+        "Z-Wave",
+        "Sensors"
+      ]
+    },
+    {
+      "id": "7babc831-66c6-4c43-ba0d-9db97bd6161b",
+      "name": "Heiman HS2WD-E Siren",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/heiman-hs2wd-e-siren/packageManifest.json",
+      "description": "Zigbee driver for the Heiman HS2WD-E siren: alarm, strobe and tone control.",
+      "tags": [
+        "Zigbee",
+        "Security"
+      ]
+    },
+    {
+      "id": "039d91e3-f3a4-4416-b389-726cbae56f23",
+      "name": "Hikvision Audible Alarm Trigger (ISAPI)",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/hikvision-audible-alarm/packageManifest.json",
+      "description": "Triggers the built-in audible alarm (siren/voice) on Hikvision cameras over ISAPI, locally.",
+      "tags": [
+        "Security",
+        "LAN"
+      ]
+    },
+    {
+      "id": "05ef8c40-8789-4bad-b678-4124e553bf22",
+      "name": "Roomba (Rest980)",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/roomba-rest980/packageManifest.json",
+      "description": "Standalone Roomba driver that talks to a local Rest980 server, with no parent app. Concepts from Aaron Ward's Roomba integration.",
+      "tags": [
+        "LAN",
+        "Appliances"
       ]
     },
     {

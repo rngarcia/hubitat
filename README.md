@@ -14,26 +14,60 @@ To install straight from this repository, use **Install → From a URL** with th
 
 ## Packages
 
+<!-- PACKAGES:START -->
 ### Energia e solar
-| Package | Type | Connection | Manifest |
+| Package | Version | Drivers | Manifest |
 |---|---|---|---|
-| [FusionSolar OpenAPI](drivers/fusionsolar) | Driver | Cloud | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/fusionsolar/packageManifest.json) |
-| [Goldshell BYTE Miner](drivers/goldshell-byte) | Driver (parent + children) | LAN | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/goldshell-byte/packageManifest.json) |
+| [FusionSolar OpenAPI](drivers/fusionsolar) | 0.2.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/fusionsolar/packageManifest.json) |
+| [Goldshell BYTE Miner](drivers/goldshell-byte) | 3.5.1 | 2 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/goldshell-byte/packageManifest.json) |
+| [Zemismart SDM02T Energy Meter](drivers/zemismart-sdm02t) | 1.4.2 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/zemismart-sdm02t/packageManifest.json) |
+| [FoxESS Cloud OpenAPI](drivers/foxess-cloud) | 0.1.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/foxess-cloud/packageManifest.json) |
 
 ### Água e aquecimento
-| Package | Type | Connection | Manifest |
+| Package | Version | Drivers | Manifest |
 |---|---|---|---|
-| [Tholz SmartHeat](drivers/tholz-smartheat) | Driver | LAN (TCP) | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tholz-smartheat/packageManifest.json) |
+| [Tholz SmartHeat](drivers/tholz-smartheat) | 1.7.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tholz-smartheat/packageManifest.json) |
+| [Tuya Zigbee Water Level Sensor](drivers/tuya-zigbee-water-level) | 2.12.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-zigbee-water-level/packageManifest.json) |
 
 ### Climatização
-| Package | Type | Connection | Manifest |
+| Package | Version | Drivers | Manifest |
 |---|---|---|---|
-| [LG ThinQ Connect Air Conditioner](drivers/lg-thinq-ac) | Child driver | Cloud | Not in HPM yet: needs its parent app |
+| [Remotec ZXT-120 IR Extender](drivers/remotec-zxt-120) | 0.1.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/remotec-zxt-120/packageManifest.json) |
+
+### Irrigação
+| Package | Version | Drivers | Manifest |
+|---|---|---|---|
+| [GiEX Irrigation Valve (sh1btabb)](drivers/giex-irrigation-valve) | 1.3.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/giex-irrigation-valve/packageManifest.json) |
+
+### Iluminação e tomadas
+| Package | Version | Drivers | Manifest |
+|---|---|---|---|
+| [Aeon Smart Dimmer 2nd Edition](drivers/aeon-smart-dimmer-2nd) | 1.0.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-smart-dimmer-2nd/packageManifest.json) |
+
+### Sensores
+| Package | Version | Drivers | Manifest |
+|---|---|---|---|
+| [Aeon Multisensor Gen5](drivers/aeon-multisensor-gen5) | 1.1.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-multisensor-gen5/packageManifest.json) |
+
+### Segurança
+| Package | Version | Drivers | Manifest |
+|---|---|---|---|
+| [Heiman HS2WD-E Siren](drivers/heiman-hs2wd-e-siren) | 1.0.3 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/heiman-hs2wd-e-siren/packageManifest.json) |
+| [Hikvision Audible Alarm Trigger (ISAPI)](drivers/hikvision-audible-alarm) | 1.5.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/hikvision-audible-alarm/packageManifest.json) |
+
+### Eletrodomésticos
+| Package | Version | Drivers | Manifest |
+|---|---|---|---|
+| [Roomba (Rest980)](drivers/roomba-rest980) | 1.0.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/roomba-rest980/packageManifest.json) |
 
 ### Integrações cloud
-| Package | Type | Connection | Manifest |
+| Package | Version | Drivers | Manifest |
 |---|---|---|---|
-| [Tuya IoT Platform (Cloud)](drivers/tuya-iot-cloud) | Driver (parent) | Cloud | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-iot-cloud/packageManifest.json) |
+| [Tuya IoT Platform (Cloud)](drivers/tuya-iot-cloud) | 1.0.5 | 4 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-iot-cloud/packageManifest.json) |
+
+### Not in HPM yet
+- [LG ThinQ Connect Air Conditioner](drivers/lg-thinq-ac): not in HPM yet
+<!-- PACKAGES:END -->
 
 ## Layout
 
@@ -44,7 +78,8 @@ drivers/<package>/
   packageManifest.json       HPM manifest + "x-catalog" block (theme, order, description, packageId)
   README.md, CHANGELOG.md    optional
 apps/<package>/              same layout, for Hubitat apps
-tools/build_repository.py    rebuilds repository.json from the manifests, ordered by theme
+tools/build_repository.py    rebuilds repository.json and the package tables in this README, ordered by theme
+tools/sniffers/              diagnostic drivers for reverse-engineering Tuya DPs (not in HPM)
 ```
 
 Folders are named by package, not by theme, so raw URLs never change when a package moves to another theme. The theme lives in each manifest's `x-catalog.theme`.
@@ -68,7 +103,7 @@ Never change an existing `packageId` or driver `id`: HPM uses them to match inst
 
 If these drivers are useful to you, you can [buy me a beer](https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD) 🍺. The same link appears in HPM under the author's name.
 
-Tips go toward the drivers I wrote or mostly rewrote (FusionSolar, Goldshell BYTE, Tholz SmartHeat). The Tuya IoT Cloud driver is Jonathan Bradshaw's work with my patches; please consider supporting him directly.
+Tips go toward the drivers I wrote or mostly rewrote; their headers and READMEs carry the link. Drivers derived from someone else's work (Aeon, ZXT-120, ThinQ) credit the original author and have no tip link. The Tuya IoT Cloud parent driver is Jonathan Bradshaw's work with my patches (the component drivers in that package are mine); please consider supporting him directly.
 
 ## License
 

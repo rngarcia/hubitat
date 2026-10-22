@@ -1,0 +1,31 @@
+{
+  "packageName": "Aeon Smart Dimmer 2nd Edition",
+  "author": "Ricardo Nogueira Garcia (based on SmartThings)",
+  "version": "1.0.1",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "Z-Wave",
+    "Lighting",
+    "Energy Monitoring"
+  ],
+  "releaseNotes": "v1.0.1: first release in the rngarcia/hubitat monorepo.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/aeon-smart-dimmer-2nd#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "1827cd06-30cb-4992-8277-db304030c9f9",
+      "name": "Aeon Smart Dimmer 2nd Edition",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-smart-dimmer-2nd/aeon-smart-dimmer-2nd.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Iluminação e tomadas",
+    "order": 1,
+    "description": "Z-Wave driver for the Aeon Labs Smart Dimmer 2nd Edition (DSC25), ported from SmartThings' metering dimmer.",
+    "packageId": "b2df0e78-90cd-4595-ac2c-55e3d7408697"
+  }
+}

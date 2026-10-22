@@ -1,0 +1,30 @@
+{
+  "packageName": "Roomba (Rest980)",
+  "author": "Ricardo Nogueira Garcia",
+  "version": "1.0.1",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "LAN",
+    "Appliances"
+  ],
+  "releaseNotes": "v1.0.1: first release in the rngarcia/hubitat monorepo.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/roomba-rest980#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "72100ccf-ca4c-4c90-bba1-f9bea5ae64c0",
+      "name": "Roomba (Rest980 Standalone)",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/roomba-rest980/roomba-rest980.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Eletrodomésticos",
+    "order": 1,
+    "description": "Standalone Roomba driver that talks to a local Rest980 server, with no parent app. Concepts from Aaron Ward's Roomba integration.",
+    "packageId": "05ef8c40-8789-4bad-b678-4124e553bf22"
+  }
+}

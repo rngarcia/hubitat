@@ -1,0 +1,30 @@
+{
+  "packageName": "Hikvision Audible Alarm Trigger (ISAPI)",
+  "author": "Ricardo Nogueira Garcia",
+  "version": "1.5.1",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "Security",
+    "LAN"
+  ],
+  "releaseNotes": "v1.5.1: first release in the rngarcia/hubitat monorepo.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/hikvision-audible-alarm#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "838b5ae0-c7f9-4092-8cec-b65ecbb90be4",
+      "name": "Hikvision Audible Alarm Trigger (ISAPI)",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/hikvision-audible-alarm/hikvision-audible-alarm.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Segurança",
+    "order": 2,
+    "description": "Triggers the built-in audible alarm (siren/voice) on Hikvision cameras over ISAPI, locally.",
+    "packageId": "039d91e3-f3a4-4416-b389-726cbae56f23"
+  }
+}

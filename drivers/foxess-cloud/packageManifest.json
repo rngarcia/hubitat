@@ -1,0 +1,31 @@
+{
+  "packageName": "FoxESS Cloud OpenAPI",
+  "author": "Ricardo Nogueira Garcia",
+  "version": "0.1.1",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "Energy Monitoring",
+    "Solar",
+    "Cloud"
+  ],
+  "releaseNotes": "v0.1.1: first release in the rngarcia/hubitat monorepo.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/foxess-cloud#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "fdd6d8f6-a727-4b7b-a533-801aa3eb8f5f",
+      "name": "FoxESS Cloud OpenAPI",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/foxess-cloud/foxess-cloud.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Energia e solar",
+    "order": 4,
+    "description": "FoxESS Cloud OpenAPI driver for FoxESS (and WEG) inverters: real-time power, grid state and daily energy.",
+    "packageId": "1b86d6e2-cba2-4cac-8da2-c1494c01ff1f"
+  }
+}

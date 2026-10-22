@@ -1,0 +1,30 @@
+{
+  "packageName": "Aeon Multisensor Gen5",
+  "author": "Ricardo Nogueira Garcia (based on keltymd)",
+  "version": "1.1.1",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "Z-Wave",
+    "Sensors"
+  ],
+  "releaseNotes": "v1.1.1: first release in the rngarcia/hubitat monorepo.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/aeon-multisensor-gen5#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "f83a97d0-749e-4f74-9053-f648b44ab4d4",
+      "name": "Aeon Multisensor Gen5",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-multisensor-gen5/aeon-multisensor-gen5.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Sensores",
+    "order": 1,
+    "description": "Fixed Z-Wave driver for the Aeon Multisensor Gen5 (motion, temperature, humidity, illuminance, battery).",
+    "packageId": "625fbf28-8a56-4fb6-9d7f-4ef0cc32a795"
+  }
+}

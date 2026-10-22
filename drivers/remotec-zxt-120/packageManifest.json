@@ -1,0 +1,30 @@
+{
+  "packageName": "Remotec ZXT-120 IR Extender",
+  "author": "Ricardo Nogueira Garcia (based on Bryan Copeland)",
+  "version": "0.1.1",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "Z-Wave",
+    "Climate Control"
+  ],
+  "releaseNotes": "v0.1.1: first release in the rngarcia/hubitat monorepo.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/remotec-zxt-120#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "89465991-d587-4a21-88f7-2cc760d26077",
+      "name": "Remotec ZXT-120 (rng)",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/remotec-zxt-120/remotec-zxt-120.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Climatização",
+    "order": 2,
+    "description": "Modified Z-Wave driver for the Remotec ZXT-120 IR extender, used to control air conditioners.",
+    "packageId": "10716275-8ee7-4916-b9dd-db9653d5d5a1"
+  }
+}

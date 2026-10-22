@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Gera o repository.json (índice do Hubitat Package Manager) a partir dos
+Gera o repository.json (índice do Hubitat Package Manager) e as tabelas do README a partir dos
 packageManifest.json de cada pasta em drivers/ e apps/.
 
 Cada manifest carrega um bloco extra "x-catalog" (ignorado pelo HPM) com:
@@ -29,6 +29,7 @@ THEMES = [
     "Irrigação",
     "Iluminação e tomadas",
     "Sensores",
+    "Segurança",
     "Eletrodomésticos",
     "Integrações cloud",
     "Outros",
@@ -52,6 +53,37 @@ def load_manifests():
             items.append((THEMES.index(theme), cat.get("order", 99), data["packageName"], mf, data, cat))
     items.sort(key=lambda i: i[:3])
     return items
+
+
+def build_readme_tables(items):
+    """Tabelas por tema para o README (entre os marcadores PACKAGES)."""
+    out, current = [], None
+    for _, _, _, mf, data, cat in items:
+        theme = cat.get("theme", "Outros")
+        if theme != current:
+            current = theme
+            out += ["", f"### {theme}", "| Package | Version | Drivers | Manifest |", "|---|---|---|---|"]
+        folder = mf.parent.relative_to(ROOT).as_posix()
+        rel = mf.relative_to(ROOT).as_posix()
+        n = len(data.get("drivers", [])) + len(data.get("apps", []))
+        out.append(f"| [{data['packageName']}]({folder}) | {data['version']} | {n} | [packageManifest.json]({RAW}/{rel}) |")
+    hidden = []
+    for kind in ("drivers", "apps"):
+        for mf in sorted((ROOT / kind).glob("*/packageManifest.json")):
+            data = json.loads(mf.read_text(encoding="utf-8"))
+            if data.get("x-catalog", {}).get("publish") is False:
+                hidden.append(f"- [{data['packageName']}]({mf.parent.relative_to(ROOT).as_posix()}): not in HPM yet")
+    if hidden:
+        out += ["", "### Not in HPM yet", *hidden]
+    return "\n".join(out).lstrip("\n") + "\n"
+
+
+def render_readme(items):
+    readme = ROOT / "README.md"
+    text = readme.read_text(encoding="utf-8")
+    start, end = "<!-- PACKAGES:START -->", "<!-- PACKAGES:END -->"
+    a, b = text.index(start) + len(start), text.index(end)
+    return text[:a] + "\n" + build_readme_tables(items) + text[b:]
 
 
 def build():
@@ -78,11 +110,15 @@ def build():
 if __name__ == "__main__":
     out = ROOT / "repository.json"
     text = build()
+    readme = render_readme(load_manifests())
     if "--check" in sys.argv:
         if not out.exists() or out.read_text(encoding="utf-8") != text:
             sys.exit("repository.json desatualizado: rode python3 tools/build_repository.py")
-        print("repository.json ok")
+        if (ROOT / "README.md").read_text(encoding="utf-8") != readme:
+            sys.exit("tabelas do README desatualizadas: rode python3 tools/build_repository.py")
+        print("repository.json e README ok")
     else:
         out.write_text(text, encoding="utf-8")
+        (ROOT / "README.md").write_text(readme, encoding="utf-8")
         n = len(json.loads(text)["packages"])
         print(f"repository.json gerado com {n} pacotes")

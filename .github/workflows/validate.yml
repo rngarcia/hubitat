@@ -1,0 +1,47 @@
+name: validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  hpm-index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: JSON is valid
+        run: |
+          for f in repository.json $(find drivers apps -name packageManifest.json 2>/dev/null); do
+            python3 -m json.tool "$f" > /dev/null || { echo "invalid JSON: $f"; exit 1; }
+          done
+      - name: repository.json is up to date
+        run: python3 tools/build_repository.py --check
+      - name: manifest locations exist and importUrl matches
+        run: |
+          python3 - <<'EOF'
+          import json, pathlib, re, sys
+          base = "https://raw.githubusercontent.com/rngarcia/hubitat/main/"
+          ids, bad = set(), []
+          for mf in pathlib.Path(".").glob("*/*/packageManifest.json"):
+              m = json.loads(mf.read_text())
+              for key in ("drivers", "apps"):
+                  for d in m.get(key, []):
+                      if d["id"] in ids: bad.append(f"{mf}: id duplicado {d['id']}")
+                      ids.add(d["id"])
+                      rel = d["location"].removeprefix(base)
+                      src = pathlib.Path(rel)
+                      if not src.exists():
+                          bad.append(f"{mf}: arquivo não existe: {rel}")
+                          continue
+                      code = src.read_text()
+                      url = re.search(r"importUrl:\s*['\"]([^'\"]+)", code)
+                      if not url or url.group(1) != d["location"]:
+                          bad.append(f"{src}: importUrl diferente do location do manifest")
+                      if f'namespace: "{d["namespace"]}"' not in code and f"namespace: '{d['namespace']}'" not in code:
+                          bad.append(f"{src}: namespace diferente do manifest")
+          print("\n".join(bad) or "manifests ok")
+          sys.exit(1 if bad else 0)
+          EOF

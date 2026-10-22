@@ -1,0 +1,30 @@
+{
+  "packageName": "Goldshell BYTE Miner",
+  "author": "Ricardo Nogueira Garcia",
+  "version": "3.2.1",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "Energy Monitoring",
+    "LAN"
+  ],
+  "releaseNotes": "v3.2.1: standardized header and importUrl.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/goldshell-byte#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "805d4ba9-c0d7-4793-ab21-7661beed2eeb",
+      "name": "Goldshell BYTE Miner (MCB+CGMiner)",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/goldshell-byte/goldshell-byte.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Energia e solar",
+    "order": 2,
+    "description": "Local driver for the Goldshell BYTE miner (MCB + CGMiner API): status, per-card metrics as child devices, LED/idle/power-plan control.",
+    "packageId": "d8467538-fb7e-4ad6-9b70-a48d4f245c81"
+  }
+}

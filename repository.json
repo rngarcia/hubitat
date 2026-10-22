@@ -1,0 +1,63 @@
+{
+  "author": "Ricardo Nogueira Garcia",
+  "gitHubUrl": "https://github.com/rngarcia",
+  "packages": [
+    {
+      "id": "4d8ff125-ffd3-43fa-8e1a-fb97794f8a7e",
+      "name": "FusionSolar OpenAPI",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/fusionsolar/packageManifest.json",
+      "description": "Huawei FusionSolar Northbound OpenAPI (cloud) driver: plant and inverter power and energy for Hubitat.",
+      "tags": [
+        "Energy Monitoring",
+        "Solar",
+        "Cloud"
+      ]
+    },
+    {
+      "id": "d8467538-fb7e-4ad6-9b70-a48d4f245c81",
+      "name": "Goldshell BYTE Miner",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/goldshell-byte/packageManifest.json",
+      "description": "Local driver for the Goldshell BYTE miner (MCB + CGMiner API): status, per-card metrics as child devices, LED/idle/power-plan control.",
+      "tags": [
+        "Energy Monitoring",
+        "LAN"
+      ]
+    },
+    {
+      "id": "609d9770-0a90-4d97-a013-10aa07e7eb68",
+      "name": "Tholz SmartHeat",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tholz-smartheat/packageManifest.json",
+      "description": "Local TCP driver for the Tholz SmartHeat 2nd gen solar water-heater controller: temperatures, heat modes, setpoint, channel control and per-channel energy estimates.",
+      "tags": [
+        "Water Heater",
+        "Energy Monitoring",
+        "LAN"
+      ]
+    },
+    {
+      "id": "3579a515-5251-4d0d-b9ad-1269df4ef72b",
+      "name": "LG ThinQ Connect Air Conditioner",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/lg-thinq-ac/packageManifest.json",
+      "description": "LG air conditioner driver using the official LG ThinQ Connect API: modes, setpoints, fan speed and swing.",
+      "tags": [
+        "Climate Control",
+        "Cloud"
+      ]
+    },
+    {
+      "id": "1db3f6cb-1721-4c66-88aa-0efbc126e5be",
+      "name": "Tuya IoT Platform (Cloud)",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-iot-cloud/packageManifest.json",
+      "description": "Tuya IoT Platform cloud parent driver (based on Jonathan Bradshaw's), with ROPO and towel-warmer-safe patches.",
+      "tags": [
+        "Cloud",
+        "Tools & Utilities"
+      ]
+    }
+  ]
+}

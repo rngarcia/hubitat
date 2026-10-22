@@ -1,0 +1,30 @@
+{
+  "packageName": "Tuya IoT Platform (Cloud)",
+  "author": "Ricardo Nogueira Garcia (based on Jonathan Bradshaw)",
+  "version": "1.0.4",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "Cloud",
+    "Tools & Utilities"
+  ],
+  "releaseNotes": "v1.0.4: standardized header, MIT credit to Jonathan Bradshaw, importUrl.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/tuya-iot-cloud#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "e824a108-d72f-4d5c-8459-354303cb3086",
+      "name": "Tuya IoT Platform (Cloud)",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-iot-cloud/tuya-iot-cloud.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Integrações cloud",
+    "order": 1,
+    "description": "Tuya IoT Platform cloud parent driver (based on Jonathan Bradshaw's), with ROPO and towel-warmer-safe patches.",
+    "packageId": "1db3f6cb-1721-4c66-88aa-0efbc126e5be"
+  }
+}

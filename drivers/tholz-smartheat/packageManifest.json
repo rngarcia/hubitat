@@ -1,0 +1,31 @@
+{
+  "packageName": "Tholz SmartHeat",
+  "author": "Ricardo Nogueira Garcia (based on VH/TRATO)",
+  "version": "1.7.1",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "Water Heater",
+    "Energy Monitoring",
+    "LAN"
+  ],
+  "releaseNotes": "v1.7.1: importUrl moved to the rngarcia/hubitat monorepo. v1.7: setHeatMode no longer forces the solar pump on; solar energy counted from heat0.on.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/tholz-smartheat#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "6f1d2c1e-4a7b-4c5e-9a3f-2b8d7e1c0a71",
+      "name": "Tholz SmartHeat",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tholz-smartheat/tholz-smartheat.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Água e aquecimento",
+    "order": 1,
+    "description": "Local TCP driver for the Tholz SmartHeat 2nd gen solar water-heater controller: temperatures, heat modes, setpoint, channel control and per-channel energy estimates.",
+    "packageId": "609d9770-0a90-4d97-a013-10aa07e7eb68"
+  }
+}

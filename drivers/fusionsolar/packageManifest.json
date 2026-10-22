@@ -1,0 +1,31 @@
+{
+  "packageName": "FusionSolar OpenAPI",
+  "author": "Ricardo Nogueira Garcia",
+  "version": "0.1.1",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-10-21",
+  "category": "Integrations",
+  "tags": [
+    "Energy Monitoring",
+    "Solar",
+    "Cloud"
+  ],
+  "releaseNotes": "v0.1.1: namespace changed from 'fusion' to 'rng'; author and importUrl fixed.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/fusionsolar#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "8159cf48-6a19-4a5d-b125-35dd9d824470",
+      "name": "FusionSolar OpenAPI (Cloud)",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/fusionsolar/fusionsolar.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Energia e solar",
+    "order": 1,
+    "description": "Huawei FusionSolar Northbound OpenAPI (cloud) driver: plant and inverter power and energy for Hubitat.",
+    "packageId": "4d8ff125-ffd3-43fa-8e1a-fb97794f8a7e"
+  }
+}

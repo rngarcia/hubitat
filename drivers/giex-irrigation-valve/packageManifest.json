@@ -25,6 +25,8 @@
     "theme": "Irrigação",
     "order": 1,
     "description": "Dedicated Zigbee driver for the GiEX irrigation valve _TZE200_sh1btabb: irrigation timing, water consumed and running totals. Based on kkossev's Tuya Zigbee Valve.",
-    "packageId": "50b2e6c7-e971-490c-b22e-1be2b683756d"
+    "packageId": "50b2e6c7-e971-490c-b22e-1be2b683756d",
+    "publish": false,
+    "note": "not maintained; use kkossev's Tuya Zigbee Valve"
   }
 }

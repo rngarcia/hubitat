@@ -27,18 +27,12 @@ To install straight from this repository, use **Install → From a URL** with th
 | Package | Version | Drivers | Manifest |
 |---|---|---|---|
 | [Tholz SmartHeat](drivers/tholz-smartheat) | 1.7.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tholz-smartheat/packageManifest.json) |
-| [Tuya Zigbee Water Level Sensor](drivers/tuya-zigbee-water-level) | 2.12.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-zigbee-water-level/packageManifest.json) |
 | [Tuya Tank Level Monitor (Wi-Fi) Local](drivers/tuya-tank-level-local) | 2.0.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-tank-level-local/packageManifest.json) |
 
 ### Climatização
 | Package | Version | Drivers | Manifest |
 |---|---|---|---|
 | [Remotec ZXT-120 IR Extender](drivers/remotec-zxt-120) | 0.1.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/remotec-zxt-120/packageManifest.json) |
-
-### Irrigação
-| Package | Version | Drivers | Manifest |
-|---|---|---|---|
-| [GiEX Irrigation Valve (sh1btabb)](drivers/giex-irrigation-valve) | 1.3.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/giex-irrigation-valve/packageManifest.json) |
 
 ### Iluminação e tomadas
 | Package | Version | Drivers | Manifest |
@@ -65,6 +59,10 @@ To install straight from this repository, use **Install → From a URL** with th
 | Package | Version | Drivers | Manifest |
 |---|---|---|---|
 | [Tuya IoT Platform (Cloud)](drivers/tuya-iot-cloud) | 1.0.5 | 4 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-iot-cloud/packageManifest.json) |
+
+### Not in HPM
+- [GiEX Irrigation Valve (sh1btabb)](drivers/giex-irrigation-valve): not maintained; use kkossev's Tuya Zigbee Valve
+- [Tuya Zigbee Water Level Sensor](drivers/tuya-zigbee-water-level): not maintained; use kkossev's Tuya Zigbee Tank Level Monitor
 <!-- PACKAGES:END -->
 
 ## Layout

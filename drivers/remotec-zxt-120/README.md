@@ -1,5 +1,7 @@
 # Remotec ZXT-120 IR Extender — Hubitat driver
 
+> **Not actively maintained.** I no longer use a ZXT-120, so changes here are untested. It stays in HPM in case it helps someone.
+
 Modified Z-Wave driver for the Remotec ZXT-120 IR extender, used to control air conditioners.
 
 Based on the work of Bryan Copeland (djdizzyd).

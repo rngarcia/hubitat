@@ -25,6 +25,8 @@
     "theme": "Água e aquecimento",
     "order": 2,
     "description": "Zigbee driver for the Tuya ultrasonic water-tank level sensor (_TZE200_lvkk0hdg): level, distance, water column height.",
-    "packageId": "0674d33c-8a8b-4cf8-98ad-5b7f97f2d5f6"
+    "packageId": "0674d33c-8a8b-4cf8-98ad-5b7f97f2d5f6",
+    "publish": false,
+    "note": "not maintained; use kkossev's Tuya Zigbee Tank Level Monitor"
   }
 }

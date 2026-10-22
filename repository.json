@@ -62,17 +62,6 @@
       ]
     },
     {
-      "id": "0674d33c-8a8b-4cf8-98ad-5b7f97f2d5f6",
-      "name": "Tuya Zigbee Water Level Sensor",
-      "category": "Integrations",
-      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-zigbee-water-level/packageManifest.json",
-      "description": "Zigbee driver for the Tuya ultrasonic water-tank level sensor (_TZE200_lvkk0hdg): level, distance, water column height.",
-      "tags": [
-        "Zigbee",
-        "Water"
-      ]
-    },
-    {
       "id": "e99e3731-a873-4595-9240-b4bb5d9cb3f3",
       "name": "Tuya Tank Level Monitor (Wi-Fi) Local",
       "category": "Integrations",
@@ -88,21 +77,10 @@
       "name": "Remotec ZXT-120 IR Extender",
       "category": "Integrations",
       "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/remotec-zxt-120/packageManifest.json",
-      "description": "Modified Z-Wave driver for the Remotec ZXT-120 IR extender, used to control air conditioners.",
+      "description": "Not actively maintained. Modified Z-Wave driver for the Remotec ZXT-120 IR extender, used to control air conditioners.",
       "tags": [
         "Z-Wave",
         "Climate Control"
-      ]
-    },
-    {
-      "id": "50b2e6c7-e971-490c-b22e-1be2b683756d",
-      "name": "GiEX Irrigation Valve (sh1btabb)",
-      "category": "Integrations",
-      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/giex-irrigation-valve/packageManifest.json",
-      "description": "Dedicated Zigbee driver for the GiEX irrigation valve _TZE200_sh1btabb: irrigation timing, water consumed and running totals. Based on kkossev's Tuya Zigbee Valve.",
-      "tags": [
-        "Zigbee",
-        "Irrigation"
       ]
     },
     {

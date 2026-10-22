@@ -24,7 +24,7 @@
   "x-catalog": {
     "theme": "Climatização",
     "order": 2,
-    "description": "Modified Z-Wave driver for the Remotec ZXT-120 IR extender, used to control air conditioners.",
+    "description": "Not actively maintained. Modified Z-Wave driver for the Remotec ZXT-120 IR extender, used to control air conditioners.",
     "packageId": "10716275-8ee7-4916-b9dd-db9653d5d5a1"
   }
 }

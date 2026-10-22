@@ -9,6 +9,7 @@ Cada manifest carrega um bloco extra "x-catalog" (ignorado pelo HPM) com:
   - description: descrição curta exibida no HPM
   - packageId:   id estável do pacote no repository.json (UUID, nunca mudar)
   - publish:     false para manter a pasta fora do índice HPM
+  - note:        motivo exibido no README quando publish é false
 
 Uso:  python3 tools/build_repository.py          # regenera repository.json
       python3 tools/build_repository.py --check  # falha se estiver desatualizado (CI)
@@ -71,10 +72,12 @@ def build_readme_tables(items):
     for kind in ("drivers", "apps"):
         for mf in sorted((ROOT / kind).glob("*/packageManifest.json")):
             data = json.loads(mf.read_text(encoding="utf-8"))
-            if data.get("x-catalog", {}).get("publish") is False:
-                hidden.append(f"- [{data['packageName']}]({mf.parent.relative_to(ROOT).as_posix()}): not in HPM yet")
+            cat = data.get("x-catalog", {})
+            if cat.get("publish") is False:
+                note = cat.get("note", "not in HPM")
+                hidden.append(f"- [{data['packageName']}]({mf.parent.relative_to(ROOT).as_posix()}): {note}")
     if hidden:
-        out += ["", "### Not in HPM yet", *hidden]
+        out += ["", "### Not in HPM", *hidden]
     return "\n".join(out).lstrip("\n") + "\n"
 
 

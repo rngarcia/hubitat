@@ -1,15 +1,15 @@
 {
   "packageName": "Tuya Tank Level Monitor (Wi-Fi) Local",
   "author": "Ricardo Nogueira Garcia",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "minimumHEVersion": "2.3.0",
-  "dateReleased": "2026-10-21",
+  "dateReleased": "2026-10-22",
   "category": "Integrations",
   "tags": [
     "Water",
     "LAN"
   ],
-  "releaseNotes": "v2.0.1: first release in the rngarcia/hubitat monorepo.",
+  "releaseNotes": "v2.1.0: Tuya protocol 3.5 support (AES-GCM), rewritten protocol layer, data points fixed for ywcgq sensors, optional persistent connection with heartbeat. Protocol 3.1 and hostname support removed: use the sensor's IP.",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/tuya-tank-level-local#readme",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [
@@ -24,9 +24,7 @@
   "x-catalog": {
     "theme": "Água e aquecimento",
     "order": 3,
-    "description": "Local-protocol driver (port 6668, AES-128-ECB, Tuya protocol 3.1/3.3/3.4) for Tuya Wi-Fi ultrasonic tank level monitors, with no Tuya Cloud. Optional volume calculation for rectangular and vertical cylindrical tanks.",
-    "packageId": "e99e3731-a873-4595-9240-b4bb5d9cb3f3",
-    "publish": false,
-    "note": "being reworked: current version does not support Tuya protocol 3.5, used by recent firmware"
+    "description": "Local driver for Tuya Wi-Fi ultrasonic tank level sensors (port 6668, protocols 3.3, 3.4 and 3.5), with no Tuya Cloud. Level, water column and alarm state, plus optional volume calculation.",
+    "packageId": "e99e3731-a873-4595-9240-b4bb5d9cb3f3"
   }
 }

@@ -25,6 +25,8 @@
     "theme": "Água e aquecimento",
     "order": 3,
     "description": "Local-protocol driver (port 6668, AES-128-ECB, Tuya protocol 3.1/3.3/3.4) for Tuya Wi-Fi ultrasonic tank level monitors, with no Tuya Cloud. Optional volume calculation for rectangular and vertical cylindrical tanks.",
-    "packageId": "e99e3731-a873-4595-9240-b4bb5d9cb3f3"
+    "packageId": "e99e3731-a873-4595-9240-b4bb5d9cb3f3",
+    "publish": false,
+    "note": "being reworked: current version does not support Tuya protocol 3.5, used by recent firmware"
   }
 }

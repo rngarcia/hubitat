@@ -1,5 +1,7 @@
 # Tuya Tank Level Monitor (Wi-Fi) Local — Hubitat driver
 
+> **Temporarily out of HPM.** Version 2.0.1 does not support Tuya local protocol 3.5, which recent firmware uses, and its data-point map does not match those devices. A fixed version is in progress.
+
 [![Buy me a beer](https://img.shields.io/badge/Buy%20me%20a%20beer-PayPal-f5a623?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD)
 
 Local-protocol driver (port 6668, AES-128-ECB, Tuya protocol 3.1/3.3/3.4) for Tuya Wi-Fi ultrasonic tank level monitors, with no Tuya Cloud. Optional volume calculation for rectangular and vertical cylindrical tanks.

@@ -448,7 +448,7 @@ static byte[] buildFrame(String v, Integer cmd, Integer seq, byte[] payload, byt
         byte[] plain = withHeader ? concat(header, payload) : payload
         byte[] head = concat(hex(PREFIX_6699), concat([0, 0] as byte[],
                       concat(int4(seq), concat(int4(cmd), int4(12 + plain.length + 16)))))
-        byte[] aad = Arrays.copyOfRange(head, 4, head.length)
+        byte[] aad = slice(head, 4, head.length)
         List gcm = gcmCrypt(key, iv, plain, aad, true)
         return concat(head, concat(iv, concat((byte[]) gcm[0], concat((byte[]) gcm[1], hex("00009966")))))
     }
@@ -516,14 +516,14 @@ static Map decodeFrame(String v, byte[] raw, byte[] key) {
         int total = 18 + len + 4
         if (raw.length < total) return null
         int cmd = uint4(raw, 10)
-        byte[] aad = Arrays.copyOfRange(raw, 4, 18)
-        byte[] iv = Arrays.copyOfRange(raw, 18, 30)
-        byte[] ct = Arrays.copyOfRange(raw, 30, 18 + len - 16)
-        byte[] tag = Arrays.copyOfRange(raw, 18 + len - 16, 18 + len)
+        byte[] aad = slice(raw, 4, 18)
+        byte[] iv = slice(raw, 18, 30)
+        byte[] ct = slice(raw, 30, 18 + len - 16)
+        byte[] tag = slice(raw, 18 + len - 16, 18 + len)
         List gcm = gcmCrypt(key, iv, ct, aad, false)
-        if (!Arrays.equals((byte[]) gcm[1], tag)) return [consumed: total, cmd: cmd, error: "tag GCM inválida"]
+        if (!sameBytes((byte[]) gcm[1], tag)) return [consumed: total, cmd: cmd, error: "tag GCM inválida"]
         byte[] plain = (byte[]) gcm[0]
-        if (plain.length >= 4) plain = Arrays.copyOfRange(plain, 4, plain.length)   // retcode
+        if (plain.length >= 4) plain = slice(plain, 4, plain.length)   // retcode
         return [consumed: total, cmd: cmd, payload: stripVersionHeader(plain)]
     }
     int len = uint4(raw, 12)
@@ -535,10 +535,10 @@ static Map decodeFrame(String v, byte[] raw, byte[] key) {
     int start = 20   // cabeçalho + retcode
     int end = total - trailer
     if (end <= start) return [consumed: total, cmd: cmd, payload: new byte[0]]
-    byte[] body = Arrays.copyOfRange(raw, start, end)
+    byte[] body = slice(raw, start, end)
     if (v == "34") {
-        byte[] expected = hmacSha256(key, Arrays.copyOfRange(raw, 0, end))
-        if (!Arrays.equals(expected, Arrays.copyOfRange(raw, end, end + 32))) {
+        byte[] expected = hmacSha256(key, slice(raw, 0, end))
+        if (!sameBytes(expected, slice(raw, end, end + 32))) {
             return [consumed: total, cmd: cmd, error: "HMAC inválido"]
         }
     }
@@ -600,9 +600,9 @@ private void finishNegotiation(byte[] payload) {
         connectionFailed("resposta de sessão inválida")
         return
     }
-    byte[] remoteNonce = Arrays.copyOfRange(payload, 0, 16)
-    byte[] proof = Arrays.copyOfRange(payload, 16, 48)
-    if (!Arrays.equals(proof, hmacSha256(realKey(), localNonce))) {
+    byte[] remoteNonce = slice(payload, 0, 16)
+    byte[] proof = slice(payload, 16, 48)
+    if (!sameBytes(proof, hmacSha256(realKey(), localNonce))) {
         connectionFailed("Local Key não confere")
         log.error "[${device.displayName}] A Local Key não confere com a do sensor. Ela muda a cada novo pareamento."
         return
@@ -617,7 +617,7 @@ static byte[] sessionKey(String v, byte[] realKey, byte[] localNonce, byte[] rem
     byte[] x = new byte[16]
     for (int i = 0; i < 16; i++) x[i] = (byte) (localNonce[i] ^ remoteNonce[i])
     if (v == "34") return aesEcb(realKey, x, true, false)
-    return (byte[]) gcmCrypt(realKey, Arrays.copyOf(localNonce, 12), x, new byte[0], true)[0]
+    return (byte[]) gcmCrypt(realKey, slice(localNonce, 0, 12), x, new byte[0], true)[0]
 }
 
 private void processDps(Map dps) {
@@ -724,9 +724,9 @@ static List gcmCrypt(byte[] key, byte[] iv, byte[] input, byte[] aad, boolean en
     c.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"))
     long[] h = toLongs(c.doFinal(new byte[16]), 0)
     byte[] j0 = new byte[16]
-    System.arraycopy(iv, 0, j0, 0, 12)
+    for (int i = 0; i < 12; i++) j0[i] = iv[i]
     j0[15] = 1
-    byte[] counter = Arrays.copyOf(j0, 16)
+    byte[] counter = slice(j0, 0, 16)
     byte[] out = new byte[input.length]
     for (int off = 0; off < input.length; off += 16) {
         incrementCounter(counter)
@@ -750,7 +750,8 @@ static List gcmCrypt(byte[] key, byte[] iv, byte[] input, byte[] aad, boolean en
 private static long[] ghashBlocks(long[] x, long[] h, byte[] data) {
     for (int off = 0; off < data.length; off += 16) {
         byte[] block = new byte[16]
-        System.arraycopy(data, off, block, 0, Math.min(16, data.length - off))
+        int n = Math.min(16, data.length - off)
+        for (int i = 0; i < n; i++) block[i] = data[off + i]
         long[] b = toLongs(block, 0)
         x = gfMul([x[0] ^ b[0], x[1] ^ b[1]] as long[], h)
     }
@@ -817,7 +818,7 @@ static long crc32(byte[] data) {
 
 private static byte[] stripVersionHeader(byte[] b) {
     if (b.length >= 15 && b[0] == (byte) '3' && b[1] == (byte) '.' && b[3] != (byte) '{') {
-        return Arrays.copyOfRange(b, 15, b.length)
+        return slice(b, 15, b.length)
     }
     return b
 }
@@ -830,9 +831,23 @@ private static byte[] randomBytes(int n) {
 
 private static byte[] concat(byte[] a, byte[] b) {
     byte[] out = new byte[a.length + b.length]
-    System.arraycopy(a, 0, out, 0, a.length)
-    System.arraycopy(b, 0, out, a.length, b.length)
+    for (int i = 0; i < a.length; i++) out[i] = a[i]
+    for (int i = 0; i < b.length; i++) out[a.length + i] = b[i]
     return out
+}
+
+// java.util.Arrays e System.arraycopy não são permitidos no sandbox do Hubitat
+private static byte[] slice(byte[] b, int from, int to) {
+    byte[] out = new byte[to - from]
+    for (int i = from; i < to; i++) out[i - from] = b[i]
+    return out
+}
+
+private static boolean sameBytes(byte[] a, byte[] b) {
+    if (a.length != b.length) return false
+    int diff = 0
+    for (int i = 0; i < a.length; i++) diff |= (a[i] ^ b[i])
+    return diff == 0
 }
 
 private static byte[] hex(String s) { HexUtils.hexStringToByteArray(s) }

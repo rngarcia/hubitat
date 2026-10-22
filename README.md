@@ -1,3 +1,7 @@
+> **Moved / Mudou-se:** this driver now lives in [rngarcia/hubitat › drivers/tholz-smartheat](https://github.com/rngarcia/hubitat/tree/main/drivers/tholz-smartheat). This repository is archived and no longer updated.
+>
+> 🇧🇷 Este driver agora fica em [rngarcia/hubitat › drivers/tholz-smartheat](https://github.com/rngarcia/hubitat/tree/main/drivers/tholz-smartheat). Este repositório está arquivado e não recebe mais atualizações.
+
 # Tholz SmartHeat — Hubitat driver
 
 Hubitat Elevation driver for the **Tholz SmartHeat 2nd generation** solar water-heater controller (e.g. TSZ1505N). It talks to the controller **locally over TCP** (port 4000, JSON frames). No cloud is needed.

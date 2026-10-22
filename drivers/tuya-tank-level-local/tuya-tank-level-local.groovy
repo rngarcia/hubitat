@@ -697,11 +697,11 @@ private BigDecimal areaM2() {
 }
 
 private void updateTemplate() {
-    def lvl = device.currentValue("level")
-    def depth = device.currentValue("liquidDepthCm")
-    def vol = device.currentValue("volumeLiters")
-    def cap = device.currentValue("tankCapacityLiters")
-    String st = device.currentValue("liquidState") ?: "--"
+    def lvl = latest("level")
+    def depth = latest("liquidDepthCm")
+    def vol = latest("volumeLiters")
+    def cap = latest("tankCapacityLiters")
+    String st = latest("liquidState") ?: "--"
     String t = "${lvl ?: '--'}% • ${depth ?: '--'} cm"
     if (enableVolumeCalc) t += " • ${vol ?: '--'} L / ${cap ?: '--'} L"
     emit("tankTemplate", t + " • ${st}", null)
@@ -867,17 +867,24 @@ private static Integer clampInt(def v, int min, int max) {
 }
 
 private Integer currentInteger(String attr) {
-    def v = device.currentValue(attr)
+    def v = latest(attr)
     return (v == null) ? null : clampInt(v, Integer.MIN_VALUE, Integer.MAX_VALUE)
 }
 
 private BigDecimal currentDecimal(String attr) {
-    def v = device.currentValue(attr)
+    def v = latest(attr)
     try { return (v == null) ? null : (v as BigDecimal) } catch (ignored) { return null }
 }
 
+private def latest(String name) {
+    return (state.latest?.containsKey(name)) ? state.latest[name] : device.currentValue(name)
+}
+
 private boolean emit(String name, Object value, String unit) {
-    if (device.currentValue(name)?.toString() == value?.toString()) return false
+    if (latest(name)?.toString() == value?.toString()) return false
+    // currentValue() não enxerga eventos enviados na mesma execução
+    if (state.latest == null) state.latest = [:]
+    state.latest[name] = value?.toString()
     Map evt = [name: name, value: value]
     if (unit) evt.unit = unit
     sendEvent(evt)

@@ -73,6 +73,17 @@
       ]
     },
     {
+      "id": "e99e3731-a873-4595-9240-b4bb5d9cb3f3",
+      "name": "Tuya Tank Level Monitor (Wi-Fi) Local",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-tank-level-local/packageManifest.json",
+      "description": "Local-protocol driver (port 6668, AES-128-ECB, Tuya protocol 3.1/3.3/3.4) for Tuya Wi-Fi ultrasonic tank level monitors, with no Tuya Cloud. Optional volume calculation for rectangular and vertical cylindrical tanks.",
+      "tags": [
+        "Water",
+        "LAN"
+      ]
+    },
+    {
       "id": "10716275-8ee7-4916-b9dd-db9653d5d5a1",
       "name": "Remotec ZXT-120 IR Extender",
       "category": "Integrations",

@@ -4,9 +4,12 @@
  *  Autor original: VH / TRATO
  *  Modificado por: Ricardo Nogueira Garcia
  *
+ *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
+ *
  *  Changelog:
  *  v1.7.1 (2026-10-21) - RNG
  *    - importUrl aponta para o monorepo rngarcia/hubitat (sem mudança de lógica)
+ *    - Link de apoio (PayPal) no cabeçalho
  *
  *  v1.7 (2026-10-19) - RNG
  *    - Fix setHeatMode: não envia mais on:true junto com o opMode. O campo "on" do

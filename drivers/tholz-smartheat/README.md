@@ -1,5 +1,7 @@
 # Tholz SmartHeat — Hubitat driver
 
+[![Buy me a beer](https://img.shields.io/badge/Buy%20me%20a%20beer-PayPal-f5a623?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD)
+
 Hubitat Elevation driver for the **Tholz SmartHeat 2nd generation** solar water-heater controller (e.g. TSZ1505N). It talks to the controller **locally over TCP** (port 4000, JSON frames). No cloud is needed.
 
 Based on the original driver by VH / TRATO ([hhorigian](https://github.com/hhorigian)). Extended and maintained by Ricardo Nogueira Garcia.
@@ -85,6 +87,10 @@ Before v1.7, `setHeatMode()` also sent `on:true` for `heat0`. To the controller,
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).
+
+## Support
+
+If this driver is useful to you, you can [buy me a beer](https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD) 🍺. Credit for the original driver goes to VH / TRATO ([hhorigian](https://github.com/hhorigian)).
 
 ## License
 

@@ -2,6 +2,8 @@
 
 Hubitat Elevation drivers and apps by Ricardo Nogueira Garcia, in one repository and one Hubitat Package Manager (HPM) index.
 
+[![Buy me a beer](https://img.shields.io/badge/Buy%20me%20a%20beer-PayPal-f5a623?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD)
+
 > 🇧🇷 Drivers e apps para Hubitat Elevation, organizados por tema, todos instaláveis pelo Hubitat Package Manager a partir de um único índice.
 
 ## Install with HPM
@@ -61,6 +63,12 @@ Never change an existing `packageId` or driver `id`: HPM uses them to match inst
 - Namespace: `rng`
 - Every driver declares `importUrl`, so the **Import** button on the driver code page also updates it.
 - Header: name, version and build date, original author (when there is one), modifier, changelog.
+
+## Support
+
+If these drivers are useful to you, you can [buy me a beer](https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD) 🍺. The same link appears in HPM under the author's name.
+
+Tips go toward the drivers I wrote or mostly rewrote (FusionSolar, Goldshell BYTE, Tholz SmartHeat). The Tuya IoT Cloud driver is Jonathan Bradshaw's work with my patches; please consider supporting him directly.
 
 ## License
 

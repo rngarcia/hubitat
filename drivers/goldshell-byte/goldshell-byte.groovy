@@ -7,9 +7,12 @@
  *   - Bearer token guardado em state via setBearerToken() (evita limite de tamanho das preferences)
  *   - Cria 2 child devices (Card 0 / Card 1) e atualiza as métricas de cada um
  *
+ *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
+ *
  *  Changelog:
  *  v3.2.1 (2026-10-21) - RNG
  *    - Cabeçalho padronizado e importUrl
+ *    - Link de apoio (PayPal) no cabeçalho
  *  v3.2.0 (2026-01-26) - RNG
  */
 

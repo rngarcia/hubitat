@@ -18,6 +18,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 RAW = "https://raw.githubusercontent.com/rngarcia/hubitat/main"
+PAYPAL = "https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD"
 
 # Ordem dos temas no índice
 THEMES = [
@@ -65,6 +66,7 @@ def build():
     repo = {
         "author": "Ricardo Nogueira Garcia",
         "gitHubUrl": "https://github.com/rngarcia",
+        "payPalUrl": PAYPAL,
         "packages": packages,
     }
     return json.dumps(repo, indent=2, ensure_ascii=False) + "\n"

@@ -3,9 +3,12 @@
  *  Versão: 0.1.1 — Build: 2026-10-21
  *  Autor: Ricardo Nogueira Garcia
  *
+ *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
+ *
  *  Changelog:
  *  v0.1.1 (2026-10-21) - RNG
  *    - Namespace "fusion" -> "rng"; author e importUrl corrigidos
+ *    - Link de apoio (PayPal) no cabeçalho
  *  v0.1.0 (2025) - RNG
  *    - Versão inicial (desenvolvida com assistência de IA)
  */

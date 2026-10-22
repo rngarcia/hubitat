@@ -1,13 +1,20 @@
 /**
- *  ThinQ Connect Air Conditioner 2 — Hubitat Driver (Cloud, LG ThinQ Connect API oficial)
- *  Versão: 1.0.1 — Build: 2026-10-21
- *  Autor: Ricardo Nogueira Garcia
+ *  ThinQ Connect Air Conditioner 2 — Hubitat Driver (child do app ThinQ Connect Integration)
+ *  Versão: 1.0.2 — Build: 2026-10-21
+ *  Autor original: Ionut Turturica (jonozzz/hubitat-thinqconnect, driver "ThinQ Connect Air Conditioner")
+ *  Modificado por: Ricardo Nogueira Garcia
+ *
+ *  Requer o app "ThinQ Connect Integration" do jonozzz (instalável pelo HPM).
+ *  Licença: Apache 2.0, a mesma da integração LG ThinQ do Home Assistant, que o original segue.
  *
  *  Changelog:
+ *  v1.0.2 (2026-10-21) - RNG
+ *    - Crédito ao autor original (Ionut Turturica) e dependência do app pai documentados
  *  v1.0.1 (2026-10-21) - RNG
  *    - Cabeçalho padronizado e importUrl
  *  v1.0.0 (2025) - RNG
- *    - Versão inicial
+ *    - Derivado do driver original: atributos de job mode, setpoints cool/heat, vento (strength/step/detail),
+ *      swing vertical, display light, timers relativo/absoluto, filtro e poluição; comandos correspondentes
  */
 
 import groovy.transform.Field
@@ -18,7 +25,7 @@ import groovy.json.JsonOutput
 @Field String DEFAULT_LOG_LEVEL = LOG_LEVELS[2]
 
 metadata {
-    definition(name: "ThinQ Connect Air Conditioner 2", namespace: "rng", author: "Ricardo Nogueira Garcia", importUrl: "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/lg-thinq-ac/lg-thinq-ac.groovy") {
+    definition(name: "ThinQ Connect Air Conditioner 2", namespace: "rng", author: "Ionut Turturica; Ricardo Nogueira Garcia", importUrl: "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/lg-thinq-ac/lg-thinq-ac.groovy") {
         capability "Sensor"
         capability "Switch"
         capability "Initialize"

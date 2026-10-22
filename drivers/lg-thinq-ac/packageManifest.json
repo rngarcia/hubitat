@@ -1,7 +1,7 @@
 {
   "packageName": "LG ThinQ Connect Air Conditioner",
-  "author": "Ricardo Nogueira Garcia",
-  "version": "1.0.1",
+  "author": "Ricardo Nogueira Garcia (based on Ionut Turturica)",
+  "version": "1.0.2",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-10-21",
   "category": "Integrations",
@@ -9,7 +9,7 @@
     "Climate Control",
     "Cloud"
   ],
-  "releaseNotes": "v1.0.1: standardized header and importUrl.",
+  "releaseNotes": "v1.0.2: credit to the original author (Ionut Turturica) and parent-app dependency documented.",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/lg-thinq-ac#readme",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [
@@ -24,7 +24,7 @@
   "x-catalog": {
     "theme": "Climatização",
     "order": 1,
-    "description": "LG air conditioner driver using the official LG ThinQ Connect API: modes, setpoints, fan speed and swing.",
+    "description": "Extended air-conditioner child driver for jonozzz's LG ThinQ Connect Integration app (requires that app).",
     "packageId": "3579a515-5251-4d0d-b9ad-1269df4ef72b",
     "publish": false
   }

@@ -1,6 +1,6 @@
 # LG ThinQ Connect Air Conditioner — Hubitat driver
 
-Cloud driver for LG air conditioners using the official LG ThinQ Connect API: operating mode, target temperature, fan speed, vertical swing and display light, mapped to Hubitat thermostat capabilities.
+Extended version of the **ThinQ Connect Air Conditioner** driver by Ionut Turturica ([jonozzz/hubitat-thinqconnect](https://github.com/jonozzz/hubitat-thinqconnect)), for LG air conditioners on the official LG ThinQ Connect API: operating mode, target temperature, fan speed, vertical swing and display light, mapped to Hubitat thermostat capabilities.
 
 ## Installation
 
@@ -11,8 +11,8 @@ Cloud driver for LG air conditioners using the official LG ThinQ Connect API: op
 
 ## Setup
 
-This is a **child driver**: it does not talk to LG on its own. A parent app handles the ThinQ Connect account, MQTT and device discovery, and calls this driver through `parent.*`. The parent app is not in this repository yet.
+This is a **child driver**: it does not talk to LG on its own. It needs the **LG ThinQ Connect Integration** app by Ionut Turturica, installable from HPM, which handles the PAT token, MQTT and device discovery. Install that first, then switch the air conditioner device's type to *ThinQ Connect Air Conditioner 2*.
 
 ## License
 
-Apache License 2.0. See [LICENSE](../../LICENSE).
+Apache License 2.0, the same terms the original follows. See [LICENSE](../../LICENSE).

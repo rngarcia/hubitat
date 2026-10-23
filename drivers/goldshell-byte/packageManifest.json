@@ -11,6 +11,7 @@
   ],
   "releaseNotes": "v3.5.1: hub version 3.5.0 (EnergyMeter via trapezoidal integration) published with the Card child driver.",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/goldshell-byte#readme",
+  "communityLink": "https://community.hubitat.com/t/release-goldshell-byte-miner-local/166998",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [
     {

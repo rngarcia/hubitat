@@ -12,6 +12,7 @@
   ],
   "releaseNotes": "v0.2.1: hub version 0.2.0 published; namespace changed from 'fusion' to 'rng'.",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/fusionsolar#readme",
+  "communityLink": "https://community.hubitat.com/t/release-huawei-inverter-for-he-fusion-solar-openapi/158304",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [
     {

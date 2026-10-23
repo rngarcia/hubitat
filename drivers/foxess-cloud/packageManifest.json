@@ -12,6 +12,7 @@
   ],
   "releaseNotes": "v0.1.1: first release in the rngarcia/hubitat monorepo.",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/foxess-cloud#readme",
+  "communityLink": "https://community.hubitat.com/t/release-foxess-cloud-openapi-foxess-and-weg-inverters/166997",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [
     {

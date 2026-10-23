@@ -11,7 +11,9 @@ Local driver for Tuya Wi-Fi ultrasonic tank level sensors (port 6668, protocols 
 | EPT ultrasonic sensor 3 m (product ID `npfinze0zsvta7aj`) | 3.5 | Working on a real device |
 | Protocols 3.3 and 3.4 | | Tested only against a simulated device built with TinyTuya |
 
-That firmware only reports data points 1 (state), 2 (water column, cm) and 22 (level, %) over the local protocol. The configuration points (alarm limits, installation height, maximum depth) are not exposed locally, so their attributes and commands only work on firmware that does expose them.
+Data points used: 1 (state), 2 (water column, cm), 7 / 8 (upper / lower alarm, %), 19 (installation height), 21 (maximum depth) and 22 (level, %). On that firmware, 7, 8, 19 and 21 only show up in the status after they are written once, for example with the `set...` commands.
+
+Heights follow the Tuya app: **installationHeight** is the distance from the sensor to the bottom of the tank, **liquidDepthMax** the distance from the sensor to the maximum water level, so the usable height is `installationHeight - liquidDepthMax`. To calibrate, fill the tank and run `calibSetDepthMaxFromCurrentLevel`.
 
 ## Requirements
 

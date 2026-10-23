@@ -1,11 +1,13 @@
 /**
  *  Tuya Component Tank Level Monitor (Wi-Fi) — Hubitat Driver
- *  Versão: 1.4.1 — Build: 2026-10-21
+ *  Versão: 1.4.2 — Build: 2026-10-22
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
  *
  *  Changelog:
+ *  v1.4.2 (2026-10-22) - RNG
+ *    - Log de debug dos eventos brutos voltou a funcionar (testava logDebug, um método, em vez de logEnable)
  *  v1.4.1 (2026-10-21) - RNG
  *    - Publicado em rngarcia/hubitat: cabeçalho padronizado, namespace "rng" e importUrl
  *    - Nome do driver sem o sufixo "- Claude"
@@ -103,7 +105,7 @@
 
 import groovy.transform.Field
 
-@Field static final String DRIVER_VERSION = "1.4.1"
+@Field static final String DRIVER_VERSION = "1.4.2"
 @Field static final String DRIVER_DATE    = "2026-07-04"
 
 metadata {
@@ -252,7 +254,7 @@ void configure() {
  * Parent calls child.parse(List<Map> events)
  */
 void parse(Object description) {
-    if (logDebug) log.debug "[${device.displayName}] parse(): recebido ${description}"
+    if (settings?.logEnable) log.debug "[${device.displayName}] parse(): recebido ${description}"
     if (!(description instanceof List)) return
 
     List<Map> evts = (List<Map>) description
@@ -263,7 +265,7 @@ void parse(Object description) {
 
         // Log raw de cada evento recebido, independente de virar atributo ou
         // não -- garante visibilidade total dos DPs/eventos da Tuya em modo debug.
-        if (logDebug) {
+        if (settings?.logEnable) {
             log.debug "[${device.displayName}] Tuya raw: ${e.name} = ${e.value}${e.unit ? ' ' + e.unit : ''}"
         }
 

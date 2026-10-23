@@ -1,6 +1,6 @@
 /**
  *  Tuya Tank Level Monitor (Wi-Fi) Local — Hubitat Driver
- *  Versão: 2.1.0 — Build: 2026-10-22
+ *  Versão: 2.2.0 — Build: 2026-10-22
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
@@ -19,7 +19,23 @@
  *  Implementação do protocolo baseada no TinyTuya (Jason Cox, MIT License):
  *    https://github.com/jasonacox/tinytuya
  *
+ *  Alturas (mesma semântica do driver cloud "Tuya Component Tank Level Monitor"):
+ *    installationHeight = distância do sensor até o FUNDO do tanque
+ *    liquidDepthMax     = distância do sensor até o NÍVEL MÁXIMO de água
+ *    liquidDepthCm      = altura da coluna de água, medida do fundo
+ *    maxWaterHeightM    = installationHeight - liquidDepthMax (altura útil)
+ *    liquidDepthMaxCalc = installationHeight - coluna atual (o que liquidDepthMax
+ *                         deveria valer se a caixa estivesse cheia agora)
+ *
  *  Changelog:
+ *  v2.2.0 (2026-10-22) - RNG
+ *    - liquidDepthMax passa a ser tratado como distância sensor -> nível máximo,
+ *      como no driver cloud; volume usa installationHeight - liquidDepthMax
+ *    - Calibração: um único comando, calibSetDepthMaxFromCurrentLevel, com a fórmula
+ *      installationHeight - coluna atual (os três comandos anteriores gravavam valores errados)
+ *    - Novos atributos liquidDepthMaxCalc e maxWaterHeightM
+ *    - DPs 7, 8, 19 e 21 confirmados em sensor real; alguns firmwares só os incluem
+ *      no status depois de escritos uma vez
  *  v2.1.0 (2026-10-22) - RNG
  *    - Camada de protocolo reescrita: suporte a 3.5 (frames 6699 + AES-GCM),
  *      negociação de sessão 3.4/3.5 corrigida, frames fragmentados, CRC32 próprio
@@ -43,15 +59,15 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import hubitat.helper.HexUtils
 
-@Field static final String DRIVER_VERSION = "2.1.0"
+@Field static final String DRIVER_VERSION = "2.2.0"
 
-// DPs da categoria ywcgq. Os de configuração só aparecem quando o sensor os envia.
+// DPs da categoria ywcgq. Alguns firmwares só reportam 7/8/19/21 depois de escritos uma vez.
 @Field static final String DP_STATE          = "1"   // enum: normal / lower_alarm / upper_alarm
 @Field static final String DP_DEPTH          = "2"   // altura da coluna d'água, m × 100
 @Field static final String DP_UPPER_LIMIT    = "7"   // max_set, %
 @Field static final String DP_LOWER_LIMIT    = "8"   // mini_set, %
-@Field static final String DP_INSTALL_HEIGHT = "19"  // installation_height, m × 1000
-@Field static final String DP_DEPTH_MAX      = "21"  // liquid_depth_max, m × 1000
+@Field static final String DP_INSTALL_HEIGHT = "19"  // installation_height (sensor -> fundo), m × 1000
+@Field static final String DP_DEPTH_MAX      = "21"  // liquid_depth_max (sensor -> nível máximo), m × 1000
 @Field static final String DP_LEVEL          = "22"  // liquid_level_percent, %
 @Field static final List<Integer> CONFIG_DPS = [7, 8, 19, 21]
 
@@ -96,6 +112,8 @@ metadata {
         attribute "lowerLimit",         "number"
         attribute "installationHeight", "number"
         attribute "liquidDepthMax",     "number"
+        attribute "liquidDepthMaxCalc", "number"
+        attribute "maxWaterHeightM",    "number"
         attribute "tankCapacityLiters",      "number"
         attribute "volumeLiters",            "number"
         attribute "volumePercentOfCapacity", "number"
@@ -105,11 +123,8 @@ metadata {
         command "setLowerLimit",         [[name: "Percent", type: "NUMBER", description: "0..100"]]
         command "setInstallationHeight", [[name: "Meters",  type: "NUMBER", description: "Ex.: 0.680"]]
         command "setLiquidDepthMax",     [[name: "Meters",  type: "NUMBER", description: "Ex.: 0.450"]]
-        command "calibSetUpperFromCurrentLevel"
-        command "calibSetLowerFromCurrentLevel"
-        command "calibSetDepthMaxFromCurrentDepth"
-        command "calibSetDepthMaxFromInstallationHeight"
-        command "calibSetInstallationHeightFromDepthMax"
+        // Usar com a caixa fisicamente CHEIA
+        command "calibSetDepthMaxFromCurrentLevel"
         command "disconnect"
     }
 
@@ -138,7 +153,7 @@ metadata {
         input name: "tankWidthCm",       type: "number",  title: "Largura (cm), retangular"
         input name: "tankDiameterCm",    type: "number",  title: "Diâmetro (cm), cilíndrico"
         input name: "tankUsableHeightM", type: "decimal", title: "Altura útil (m), opcional",
-              description: "Se vazio, usa liquidDepthMax ou installationHeight do sensor"
+              description: "Se vazio, usa installationHeight - liquidDepthMax do sensor"
         input name: "roundVolumeLiters", type: "number",  title: "Arredondar volume para múltiplos de N litros",
               defaultValue: 1
 
@@ -214,34 +229,21 @@ void setLiquidDepthMax(Number meters) {
     enqueue("set", [(DP_DEPTH_MAX): clampInt((meters ?: 0) * 1000, 100, 2900)])
 }
 
-void calibSetUpperFromCurrentLevel() {
-    Integer lvl = currentInteger("level")
-    if (lvl == null) { log.warn "[${device.displayName}] Sem leitura de nível para calibrar"; return }
-    setUpperLimit(lvl)
-}
-
-void calibSetLowerFromCurrentLevel() {
-    Integer lvl = currentInteger("level")
-    if (lvl == null) { log.warn "[${device.displayName}] Sem leitura de nível para calibrar"; return }
-    setLowerLimit(lvl)
-}
-
-void calibSetDepthMaxFromCurrentDepth() {
+/** Com a caixa cheia: liquidDepthMax = installationHeight - coluna atual. */
+void calibSetDepthMaxFromCurrentLevel() {
+    BigDecimal inst = currentDecimal("installationHeight")
     Integer cm = currentInteger("liquidDepthCm")
-    if (cm == null) { log.warn "[${device.displayName}] Sem leitura de profundidade para calibrar"; return }
-    setLiquidDepthMax(cm / 100G)
-}
-
-void calibSetDepthMaxFromInstallationHeight() {
-    BigDecimal h = currentDecimal("installationHeight")
-    if (h == null) { log.warn "[${device.displayName}] installationHeight ainda não lido"; return }
-    setLiquidDepthMax(h)
-}
-
-void calibSetInstallationHeightFromDepthMax() {
-    BigDecimal mx = currentDecimal("liquidDepthMax")
-    if (mx == null) { log.warn "[${device.displayName}] liquidDepthMax ainda não lido"; return }
-    setInstallationHeight(mx)
+    if (inst == null || cm == null) {
+        log.warn "[${device.displayName}] Faça um Refresh antes: faltam installationHeight ou liquidDepthCm"
+        return
+    }
+    BigDecimal newMax = inst - cm / 100G
+    if (newMax <= 0G) {
+        log.warn "[${device.displayName}] Resultado ${newMax} m <= 0 (instalação ${inst} m, coluna ${cm} cm). Confira installationHeight e se a caixa está cheia."
+        return
+    }
+    logInfo "Calibrando liquidDepthMax = ${inst} m - ${cm / 100G} m = ${newMax} m"
+    setLiquidDepthMax(newMax)
 }
 
 /* ── Sessão e conexão ─────────────────────────────────────────────────────── */
@@ -661,7 +663,32 @@ private void processDps(Map dps) {
                 logDebug "DP sem mapeamento: ${k} = ${v}"
         }
     }
-    if (touched) recalcVolume()
+    if (touched) {
+        recalcDerived()
+        recalcVolume()
+    }
+}
+
+private void recalcDerived() {
+    BigDecimal inst = currentDecimal("installationHeight")
+    BigDecimal max = currentDecimal("liquidDepthMax")
+    Integer cm = currentInteger("liquidDepthCm")
+    if (inst != null && cm != null) {
+        BigDecimal calc = [inst - cm / 100G, 0G].max().setScale(3, BigDecimal.ROUND_HALF_UP)
+        emit("liquidDepthMaxCalc", calc, "m")
+    }
+    if (inst != null && max != null && inst > max) {
+        emit("maxWaterHeightM", (inst - max).setScale(3, BigDecimal.ROUND_HALF_UP), "m")
+    }
+}
+
+/** Altura útil: preferência manual, ou installationHeight - liquidDepthMax. */
+private BigDecimal usableHeight() {
+    if (tankUsableHeightM != null) return tankUsableHeightM as BigDecimal
+    BigDecimal inst = currentDecimal("installationHeight")
+    BigDecimal max = currentDecimal("liquidDepthMax")
+    if (inst == null || max == null || inst <= max) return null
+    return (inst - max).setScale(3, BigDecimal.ROUND_HALF_UP)
 }
 
 /* ── Volume ────────────────────────────────────────────────────────────────── */
@@ -669,8 +696,7 @@ private void processDps(Map dps) {
 void recalcVolume() {
     if (enableVolumeCalc) {
         Integer depthCm = currentInteger("liquidDepthCm")
-        BigDecimal height = (tankUsableHeightM != null) ? (tankUsableHeightM as BigDecimal) :
-            (currentDecimal("liquidDepthMax") ?: currentDecimal("installationHeight"))
+        BigDecimal height = usableHeight()
         BigDecimal area = areaM2()
         if (depthCm != null && height && area) {
             BigDecimal depthM = [[depthCm / 100G, 0G].max(), height].min()

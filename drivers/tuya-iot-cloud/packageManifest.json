@@ -1,15 +1,15 @@
 {
   "packageName": "Tuya IoT Platform (Cloud)",
   "author": "Ricardo Nogueira Garcia (based on Jonathan Bradshaw)",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "minimumHEVersion": "2.3.0",
-  "dateReleased": "2026-10-21",
+  "dateReleased": "2026-10-22",
   "category": "Integrations",
   "tags": [
     "Cloud",
     "Tools & Utilities"
   ],
-  "releaseNotes": "v1.0.5: optional component drivers added: tank level monitor, towel warmer with power monitor, air purifier.",
+  "releaseNotes": "v1.0.6: tank level component 1.4.2 fixes raw-event debug logging. v1.0.5: optional component drivers added: tank level monitor, towel warmer with power monitor, air purifier.",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/tuya-iot-cloud#readme",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [

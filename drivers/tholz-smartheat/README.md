@@ -4,7 +4,7 @@
 
 Hubitat Elevation driver for the **Tholz SmartHeat 2nd generation** solar water-heater controller (e.g. TSZ1505N). It talks to the controller **locally over TCP** (port 4000, JSON frames). No cloud is needed.
 
-Based on the original driver by VH / TRATO ([hhorigian](https://github.com/hhorigian)). Extended and maintained by Ricardo Nogueira Garcia.
+Based on the original Tholz SmartConnect (TCP) driver for the SmartPool controller by VH / TRATO ([hhorigian/hubitat_tholz](https://github.com/hhorigian/hubitat_tholz), Apache 2.0), adapted to the SmartHeat and extended by Ricardo Nogueira Garcia.
 
 > 🇧🇷 Driver para Hubitat do controlador de aquecimento solar Tholz SmartHeat 2ª geração, com comunicação local via TCP. Inclui medição estimada de consumo de energia por apoio (bomba solar, resistência elétrica, gás e recirculação), integrável ao Painel de Energia do Home Assistant.
 
@@ -90,7 +90,7 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ## Support
 
-If this driver is useful to you, you can [buy me a beer](https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD) 🍺. Credit for the original driver goes to VH / TRATO ([hhorigian](https://github.com/hhorigian)).
+If this driver is useful to you, you can [buy me a beer](https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD) 🍺. Credit for the original driver goes to VH / TRATO ([hhorigian/hubitat_tholz](https://github.com/hhorigian/hubitat_tholz)).
 
 ## License
 

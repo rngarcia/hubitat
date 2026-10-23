@@ -1,8 +1,13 @@
 /**
  *  Tholz SmartHeat — Hubitat Driver (TCP)
  *  Versão: 1.7.1 — Build: 2026-10-21
- *  Autor original: VH / TRATO
- *  Modificado por: Ricardo Nogueira Garcia
+ *  Autor original: VH / TRATO — "Tholz SmartConnect (TCP)", driver do SmartPool
+ *                  https://github.com/hhorigian/hubitat_tholz
+ *  Modificado por: Ricardo Nogueira Garcia (adaptado ao SmartHeat 2ª geração)
+ *
+ *  Copyright 2025 - VH (original driver)
+ *  Modifications Copyright 2025-2026 Ricardo Nogueira Garcia
+ *  Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
  *
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
  *

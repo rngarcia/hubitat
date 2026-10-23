@@ -12,6 +12,7 @@
   ],
   "releaseNotes": "v1.7.1: importUrl moved to the rngarcia/hubitat monorepo. v1.7: setHeatMode no longer forces the solar pump on; solar energy counted from heat0.on.",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/tholz-smartheat#readme",
+  "communityLink": "https://community.hubitat.com/t/release-tholz-smartheat-solar-boiler-driver-for-he/158085",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [
     {

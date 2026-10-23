@@ -121,8 +121,8 @@ metadata {
 
         command "setUpperLimit",         [[name: "Percent", type: "NUMBER", description: "0..100"]]
         command "setLowerLimit",         [[name: "Percent", type: "NUMBER", description: "0..100"]]
-        command "setInstallationHeight", [[name: "Meters",  type: "NUMBER", description: "Ex.: 0.680"]]
-        command "setLiquidDepthMax",     [[name: "Meters",  type: "NUMBER", description: "Ex.: 0.450"]]
+        command "setInstallationHeight", [[name: "Meters",  type: "NUMBER", description: "Sensor até o fundo. Ex.: 0.680"]]
+        command "setLiquidDepthMax",     [[name: "Meters",  type: "NUMBER", description: "Sensor até o nível máximo. Ex.: 0.230"]]
         // Usar com a caixa fisicamente CHEIA
         command "calibSetDepthMaxFromCurrentLevel"
         command "disconnect"

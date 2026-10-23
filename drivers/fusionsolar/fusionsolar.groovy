@@ -3,6 +3,8 @@
  *  Versão: 0.2.1 — Build: 2026-10-21
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
+ *  Referência: fluxo da OpenAPI baseado na integração Home Assistant "HomeAssistant-FusionSolar"
+ *              (Tijs Verkoyen) https://github.com/tijsverkoyen/HomeAssistant-FusionSolar
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
  *
  *  Changelog:

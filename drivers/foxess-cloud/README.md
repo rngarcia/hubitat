@@ -11,6 +11,10 @@ FoxESS Cloud OpenAPI driver for FoxESS (and WEG) inverters: real-time power, gri
 
 **Manual:** Drivers Code → New Driver → Import, paste `https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/foxess-cloud/foxess-cloud.groovy` and Save. Later updates use the same **Import** button.
 
+## Credits
+
+Authentication (MD5 request signature), endpoints and variable mapping are based on the Home Assistant integration [foxess-ha](https://github.com/macxq/foxess-ha) by macxq and contributors. Thanks to them.
+
 ## Support
 
 If this driver is useful to you, you can [buy me a beer](https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD) 🍺.

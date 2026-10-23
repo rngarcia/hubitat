@@ -15,6 +15,10 @@ Local driver for the Goldshell BYTE miner (MCB panel + CGMiner API). The parent 
 
 Miner IP in Preferences. Then run the `setBearerToken` command with the panel's JWT token (token only, without `Bearer `); it is kept in state to avoid the preference length limit.
 
+## Credits
+
+Written from scratch against the miner's own web panel API (`/mcb/status`, `/mcb/setting`, `/mcb/cgminer?cgminercmd=devs`). The same API is also used by [pyasic](https://github.com/UpstreamData/pyasic), a useful reference for other Goldshell models.
+
 ## Support
 
 If this driver is useful to you, you can [buy me a beer](https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD) 🍺.

@@ -1,6 +1,6 @@
 /**
  *  Tuya Tank Level Monitor (Wi-Fi) Local — Hubitat Driver
- *  Versão: 2.2.0 — Build: 2026-10-22
+ *  Versão: 2.3.0 — Build: 2026-10-25
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
@@ -27,7 +27,20 @@
  *    liquidDepthMaxCalc = installationHeight - coluna atual (o que liquidDepthMax
  *                         deveria valer se a caixa estivesse cheia agora)
  *
+ *  Filtro de leitura (v2.3.0): com a caixa enchendo, a turbulência e a espuma fazem o
+ *  ultrassom devolver leituras espalhadas. O driver guarda as amostras da janela
+ *  (preferência "Janela do filtro") e publica a MEDIANA, que ignora picos isolados:
+ *    - durante a variação, só publica quando a mediana anda >= "Banda morta" (%)
+ *      em duas amostras seguidas, no mesmo sentido;
+ *    - quando o sensor fica quieto pela duração da janela, publica a mediana exata,
+ *      mesmo que a diferença seja menor que a banda morta.
+ *  level e liquidDepthCm saem da mesma amostra, então ficam coerentes entre si.
+ *
  *  Changelog:
+ *  v2.3.0 (2026-10-25) - RNG
+ *    - Filtro de mediana com janela de tempo para level/liquidDepthCm, banda morta
+ *      durante a variação e publicação do valor exato quando a leitura estabiliza
+ *    - Atributo opcional levelRaw (leitura bruta), desligado por padrão
  *  v2.2.0 (2026-10-22) - RNG
  *    - liquidDepthMax passa a ser tratado como distância sensor -> nível máximo,
  *      como no driver cloud; volume usa installationHeight - liquidDepthMax
@@ -59,7 +72,9 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import hubitat.helper.HexUtils
 
-@Field static final String DRIVER_VERSION = "2.2.0"
+@Field static final String DRIVER_VERSION = "2.3.0"
+@Field static final Integer FILTER_MIN_SAMPLES = 3    // abaixo disso, espera estabilizar
+@Field static final Integer FILTER_MAX_SAMPLES = 25   // teto do buffer, mesmo com janela longa
 
 // DPs da categoria ywcgq. Alguns firmwares só reportam 7/8/19/21 depois de escritos uma vez.
 @Field static final String DP_STATE          = "1"   // enum: normal / lower_alarm / upper_alarm
@@ -106,6 +121,7 @@ metadata {
         capability "PresenceSensor"   // "present" = sessão local ativa
 
         attribute "level",              "number"
+        attribute "levelRaw",           "number"
         attribute "liquidDepthCm",      "number"
         attribute "liquidState",        "string"
         attribute "upperLimit",         "number"
@@ -145,6 +161,17 @@ metadata {
                         "900": "15 minutos", "1800": "30 minutos", "3600": "1 hora"],
               defaultValue: "300", required: true
 
+        input name: "filterWindowSec", type: "enum", title: "Janela do filtro de nível",
+              description: "Mediana das leituras desse intervalo. Também é o tempo de silêncio para publicar o valor final.",
+              options: ["0": "Desligado (publica toda leitura)", "15": "15 segundos", "30": "30 segundos",
+                        "60": "1 minuto", "120": "2 minutos"],
+              defaultValue: "30", required: true
+        input name: "levelDeadband", type: "number", title: "Banda morta durante a variação (%)",
+              description: "Só publica antes de estabilizar se a mediana andar pelo menos isso. 0 = publica toda mediana nova.",
+              defaultValue: 2
+        input name: "publishRaw", type: "bool", title: "Publicar leitura bruta (levelRaw)",
+              description: "Para diagnóstico: gera um evento por leitura, como antes do filtro", defaultValue: false
+
         input name: "enableVolumeCalc", type: "bool", title: "Calcular volume", defaultValue: false
         input name: "tankShape", type: "enum", title: "Formato do tanque",
               options: ["rectangular": "Retangular (C × L)", "cylVertical": "Cilíndrico vertical"],
@@ -171,6 +198,8 @@ void updated() {
     logInfo "Configurado v${DRIVER_VERSION}"
     unschedule()
     closeSocket("configuração alterada")
+    session().samples = []
+    session().pendingDir = null
     if (logEnable) runIn(1800, "logsOff")
     schedulePolling()
     runIn(2, "refresh")
@@ -624,17 +653,15 @@ static byte[] sessionKey(String v, byte[] realKey, byte[] localNonce, byte[] rem
 
 private void processDps(Map dps) {
     boolean touched = false
+    Integer rawPct = null
+    Integer rawCm = null
     dps.each { k, v ->
         switch (k as String) {
             case DP_LEVEL:
-                Integer pct = clampInt(v, 0, 100)
-                if (emit("level", pct, "%")) logDesc "Nível: ${pct}%"
-                touched = true
+                rawPct = clampInt(v, 0, 100)
                 break
             case DP_DEPTH:
-                Integer cm = clampInt(v, 0, 100000)
-                if (emit("liquidDepthCm", cm, "cm")) logDesc "Coluna d'água: ${cm} cm"
-                touched = true
+                rawCm = clampInt(v, 0, 100000)
                 break
             case DP_STATE:
                 if (emit("liquidState", v as String, null)) logDesc "Estado: ${v}"
@@ -662,6 +689,90 @@ private void processDps(Map dps) {
             default:
                 logDebug "DP sem mapeamento: ${k} = ${v}"
         }
+    }
+    if (touched) {
+        recalcDerived()
+        recalcVolume()
+    }
+    if (rawPct != null || rawCm != null) addSample(rawPct, rawCm)
+}
+
+/* ── Filtro de nível ───────────────────────────────────────────────────────── */
+
+private Integer filterWindow() {
+    try { return (filterWindowSec ?: "30") as Integer } catch (ignored) { return 30 }
+}
+
+/** Guarda a leitura bruta e decide se publica agora ou espera estabilizar. */
+private void addSample(Integer pct, Integer cm) {
+    Map s = session()
+    // Uma mensagem pode trazer só o DP 22 ou só o DP 2: completa com o último bruto
+    if (pct == null) pct = s.rawLevel as Integer
+    if (cm == null) cm = s.rawCm as Integer
+    s.rawLevel = pct
+    s.rawCm = cm
+    if (pct == null) return
+    if (publishRaw) emit("levelRaw", pct, "%")
+
+    Integer win = filterWindow()
+    if (win <= 0) {
+        publishLevel(pct, cm)
+        return
+    }
+    long t = now()
+    List buf = ((s.samples ?: []) as List).findAll { (t - (it.t as Long)) <= win * 1000L }
+    buf << [t: t, level: pct, cm: cm]
+    while (buf.size() > FILTER_MAX_SAMPLES) buf.remove(0)
+    s.samples = buf
+
+    if (buf.size() >= FILTER_MIN_SAMPLES) publishFiltered(false)
+    // Sem leitura nova durante a janela inteira = estabilizou: publica o valor exato
+    runIn(win, "filterSettled")
+}
+
+void filterSettled() {
+    publishFiltered(true)
+}
+
+/** Publica a mediana do buffer. Antes de estabilizar, respeita a banda morta. */
+private void publishFiltered(boolean settled) {
+    List buf = session().samples as List
+    if (!buf) return
+    List sorted = buf.sort(false) { it.level as Integer }
+    Map med = (Map) sorted[(sorted.size() - 1).intdiv(2)]
+    Integer pct = med.level as Integer
+    Integer cm = med.cm as Integer
+    Map s = session()
+    if (!settled) {
+        Integer cur = currentInteger("level")
+        Integer band = clampInt(levelDeadband ?: 0, 0, 100)
+        if (cur != null) {
+            if (Math.abs(pct - cur) < band) {
+                s.pendingDir = null
+                return
+            }
+            // Confirmação: duas medianas seguidas fora da banda, no mesmo sentido
+            Integer dir = pct > cur ? 1 : -1
+            if (s.pendingDir != dir) {
+                s.pendingDir = dir
+                return
+            }
+        }
+    }
+    s.pendingDir = null
+    if (settled) logDebug "Leitura estável: mediana ${pct}% de ${buf.size()} amostra(s)"
+    publishLevel(pct, cm)
+}
+
+private void publishLevel(Integer pct, Integer cm) {
+    boolean touched = false
+    if (pct != null && emit("level", pct, "%")) {
+        logDesc "Nível: ${pct}%"
+        touched = true
+    }
+    if (cm != null && emit("liquidDepthCm", cm, "cm")) {
+        logDesc "Coluna d'água: ${cm} cm"
+        touched = true
     }
     if (touched) {
         recalcDerived()

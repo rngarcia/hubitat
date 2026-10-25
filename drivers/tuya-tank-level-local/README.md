@@ -28,6 +28,15 @@ Heights follow the Tuya app: **installationHeight** is the distance from the sen
 
 **Manual:** Drivers Code → New Driver → Import, paste `https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-tank-level-local/tuya-tank-level-local.groovy` and Save. Later updates use the same **Import** button.
 
+## Reading filter
+
+While the tank is filling, turbulence and foam make ultrasonic sensors report scattered readings every few seconds. Since v2.3.0 the driver keeps the readings from a time window (preference *Janela do filtro de nível*, 30 s by default) and publishes their median:
+
+- while the level is changing, it publishes only when the median moves at least the deadband (*Banda morta*, 2% by default) twice in a row in the same direction;
+- once the sensor goes quiet for a whole window, it publishes the exact median, so the final level is accurate.
+
+Set the window to *Desligado* to publish every reading, as before. Turn on *Publicar leitura bruta (levelRaw)* to compare raw and filtered values while tuning.
+
 ## Notes
 
 - Hubitat's sandbox does not allow `javax.crypto.spec.GCMParameterSpec`, so AES-GCM for protocol 3.5 is implemented in the driver on top of AES-ECB.

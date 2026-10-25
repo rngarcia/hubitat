@@ -1,15 +1,15 @@
 {
   "packageName": "Tuya Tank Level Monitor (Wi-Fi) Local",
   "author": "Ricardo Nogueira Garcia",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "minimumHEVersion": "2.3.0",
-  "dateReleased": "2026-10-22",
+  "dateReleased": "2026-10-25",
   "category": "Integrations",
   "tags": [
     "Water",
     "LAN"
   ],
-  "releaseNotes": "v2.2.0: liquidDepthMax now means sensor-to-maximum-level distance (same as the cloud driver); volume uses installationHeight - liquidDepthMax; single calibration command with the corrected formula; new liquidDepthMaxCalc and maxWaterHeightM attributes. v2.1.0: Tuya protocol 3.5 support.",
+  "releaseNotes": "v2.3.0: time-window median filter for level/liquidDepthCm (default 30 s) to reject the scattered ultrasonic readings while the tank is filling; during changes it publishes only when the median moves past a deadband (default 2%) twice in the same direction, and publishes the exact median once readings settle; optional levelRaw attribute for diagnostics. v2.2.0: liquidDepthMax now means sensor-to-maximum-level distance (same as the cloud driver); single calibration command with the corrected formula.",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/tuya-tank-level-local#readme",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [

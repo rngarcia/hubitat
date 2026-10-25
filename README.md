@@ -27,7 +27,7 @@ To install straight from this repository, use **Install → From a URL** with th
 | Package | Version | Drivers | Manifest |
 |---|---|---|---|
 | [Tholz SmartHeat](drivers/tholz-smartheat) | 1.7.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tholz-smartheat/packageManifest.json) |
-| [Tuya Tank Level Monitor (Wi-Fi) Local](drivers/tuya-tank-level-local) | 2.2.0 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-tank-level-local/packageManifest.json) |
+| [Tuya Tank Level Monitor (Wi-Fi) Local](drivers/tuya-tank-level-local) | 2.3.0 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-tank-level-local/packageManifest.json) |
 
 ### Climatização
 | Package | Version | Drivers | Manifest |

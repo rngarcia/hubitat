@@ -1,11 +1,16 @@
 /**
  *  Heiman HS2WD-E Siren — Hubitat Driver
- *  Versão: 1.0.4 — Build: 2026-10-28
+ *  Versão: 1.0.5 — Build: 2026-10-28
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
  *
  *  Changelog:
+ *  v1.0.5 (2026-10-28) - RNG
+ *    - Gravação do atributo maxDuration em UINT16 little-endian (antes saía {00F0}, que o aparelho lia como 61440)
+ *    - Resposta ao enroll request do IAS Zone (a sirene repetia o pedido a cada ~5 s e gerava um evento lastCheckin a cada vez)
+ *    - Strobe testado no aparelho: pisca continuamente durante a duração (não só uma vez);
+ *      strobeSupported passa a "supported" e os textos de log foram corrigidos
  *  v1.0.4 (2026-10-28) - RNG
  *    - Strobe corrigido: bit de strobe ligado no Start Warning (0x17 = siren + strobe, 0x04 = strobe-only)
  *    - Payload do Start Warning na ordem do ZCL (info, duração, duty cycle, strobe level);
@@ -128,7 +133,7 @@ def installed() {
 
     sendEvent(name: "alarm", value: "off")
     sendEvent(name: "switch", value: "off")
-    sendEvent(name: "strobeSupported", value: "flash_once")
+    sendEvent(name: "strobeSupported", value: "supported")
 
     sendZigbeeCommands(configureCmds())
 }
@@ -136,7 +141,7 @@ def installed() {
 def updated() {
     logInfo "Updated - maxDuration=${getDuration()}s"
 
-    sendEvent(name: "strobeSupported", value: "flash_once")
+    sendEvent(name: "strobeSupported", value: "supported")
 
     unschedule("logsOff")
     if (settings.debugLogging) {
@@ -158,7 +163,7 @@ def refresh() {
 
 private List<String> configureCmds() {
     List<String> cmds = []
-    cmds += zigbee.writeAttribute(0x0502, 0x0000, DataType.UINT16, getDuration())
+    cmds += zigbee.writeAttribute(0x0502, 0x0000, DataType.UINT16, uint16LittleEndian(getDuration()))
     cmds += zigbee.readAttribute(0x0502, 0x0000)
     cmds += refreshCmds()
 
@@ -184,6 +189,12 @@ def parse(String description) {
     logDebug "Parsing: ${description}"
 
     if (!description) return null
+
+    // IAS Zone: a sirene repete o enroll request a cada ~5 s até o hub responder
+    if (description.startsWith("enroll request")) {
+        logInfo "IAS Zone enroll request received - sending enroll response"
+        return zigbee.enrollResponse()
+    }
 
     sendEvent(
         name: "lastCheckin",
@@ -260,7 +271,7 @@ def both() {
 }
 
 def strobe() {
-    logInfo "Turning strobe on (flashes once)"
+    logInfo "Turning strobe on (${getDuration()}s)"
 
     setAlarmState("strobe", "on", "Strobe on")
     scheduleAutoOff()

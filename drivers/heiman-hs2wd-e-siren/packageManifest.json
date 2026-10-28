@@ -1,7 +1,7 @@
 {
   "packageName": "Heiman HS2WD-E Siren",
   "author": "Ricardo Nogueira Garcia",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-10-28",
   "category": "Integrations",
@@ -9,7 +9,7 @@
     "Zigbee",
     "Security"
   ],
-  "releaseNotes": "v1.0.4: fixes the strobe (strobe bit and payload field order), siren now uses the burglar warning mode, strobe-only command, new Health Check Siren/Strobe commands, alarm/switch reset when the duration ends, WarningDevice-EF-3.0 fingerprint, lastCheckin, and commands from installed()/updated() are now actually sent. maxDuration is limited to 1..600 s. Parts derived from gabriele-v's driver (Apache 2.0).",
+  "releaseNotes": "v1.0.5: the maxDuration attribute is now written in the correct byte order, the driver answers the siren's IAS Zone enroll requests (it repeated them every 5 s), and the strobe is confirmed to flash continuously (strobeSupported is now \"supported\"). v1.0.4: fixes the strobe (strobe bit and payload field order), siren now uses the burglar warning mode, strobe-only command, new Health Check Siren/Strobe commands, alarm/switch reset when the duration ends, WarningDevice-EF-3.0 fingerprint, lastCheckin, and commands from installed()/updated() are now actually sent. maxDuration is limited to 1..600 s. Parts derived from gabriele-v's driver (Apache 2.0).",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/heiman-hs2wd-e-siren#readme",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [

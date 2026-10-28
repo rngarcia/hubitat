@@ -1,13 +1,19 @@
 /**
  *  Heiman HS2WD-E Siren — Hubitat Driver
- *  Versão: 1.0.5 — Build: 2026-10-28
+ *  Versão: 1.0.6 — Build: 2026-10-28
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
  *
  *  Changelog:
+ *  v1.0.6 (2026-10-28) - RNG
+ *    - Gravação do atributo maxDuration volta a usar o inteiro direto: o hub já converte a ordem dos bytes
+ *      (a v1.0.5 gravava 58880 no aparelho em vez de 230)
+ *    - Bateria: refresh também lê a tensão (0x0020) e publica o atributo batteryVoltage. Medido no aparelho:
+ *      2,4 V (nominal 4,1 V) e percentual 0, então o valor é publicado como o aparelho informa
+ *    - Resposta ao enroll request enviada com sendHubCommand (antes era só o retorno de parse()) e logada em debug;
+ *      o aviso a cada ~5 s deixou de ir para o log info
  *  v1.0.5 (2026-10-28) - RNG
- *    - Gravação do atributo maxDuration em UINT16 little-endian (antes saía {00F0}, que o aparelho lia como 61440)
  *    - Resposta ao enroll request do IAS Zone (a sirene repetia o pedido a cada ~5 s e gerava um evento lastCheckin a cada vez)
  *    - Strobe testado no aparelho: pisca continuamente durante a duração (não só uma vez);
  *      strobeSupported passa a "supported" e os textos de log foram corrigidos
@@ -16,7 +22,7 @@
  *    - Payload do Start Warning na ordem do ZCL (info, duração, duty cycle, strobe level);
  *      duração em UINT16 little-endian explícito
  *    - siren() agora usa warning mode burglar (0x13) em vez de 0x03 (mode Stop)
- *    - strobe() agora é strobe-only (o LED pisca uma vez); atributo strobeSupported = flash_once
+ *    - strobe() agora é strobe-only
  *    - Novos comandos healthCheckSiren (chirp curto, OFF delay configurável) e healthCheckStrobe
  *    - alarm/switch voltam para off quando a duração termina (autoOff)
  *    - installed()/updated() enviam os comandos via sendHubCommand (o retorno de updated() não é executado no Hubitat)
@@ -80,6 +86,7 @@ metadata {
         attribute "hwVer", "string"
         attribute "strobeSupported", "string"
         attribute "lastCheckin", "string"
+        attribute "batteryVoltage", "number"
 
         // Variante antiga
         fingerprint profileId: "0104",
@@ -163,7 +170,8 @@ def refresh() {
 
 private List<String> configureCmds() {
     List<String> cmds = []
-    cmds += zigbee.writeAttribute(0x0502, 0x0000, DataType.UINT16, uint16LittleEndian(getDuration()))
+    // O hub converte o inteiro para a ordem de bytes do ZCL (ex.: 230 sai como {00E6})
+    cmds += zigbee.writeAttribute(0x0502, 0x0000, DataType.UINT16, getDuration())
     cmds += zigbee.readAttribute(0x0502, 0x0000)
     cmds += refreshCmds()
 
@@ -174,7 +182,8 @@ private List<String> configureCmds() {
 private List<String> refreshCmds() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, 0x0003)    // Hardware version
-    cmds += zigbee.readAttribute(0x0001, 0x0021)    // Battery percentage
+    cmds += zigbee.readAttribute(0x0001, 0x0020)    // Battery voltage (100 mV)
+    cmds += zigbee.readAttribute(0x0001, 0x0021)    // Battery percentage (0.5 %)
     cmds += zigbee.readAttribute(0x0502, 0x0000)    // Max warning duration
 
     logDebug "refresh cmds: ${cmds}"
@@ -192,8 +201,9 @@ def parse(String description) {
 
     // IAS Zone: a sirene repete o enroll request a cada ~5 s até o hub responder
     if (description.startsWith("enroll request")) {
-        logInfo "IAS Zone enroll request received - sending enroll response"
-        return zigbee.enrollResponse()
+        logDebug "IAS Zone enroll request received - sending enroll response"
+        sendZigbeeCommands(zigbee.enrollResponse())
+        return null
     }
 
     sendEvent(
@@ -209,6 +219,15 @@ def parse(String description) {
     if (descMap.cluster == "0000" && descMap.attrId == "0003") {
         sendEvent(name: "hwVer", value: descMap.value,
             descriptionText: "Hardware version is ${descMap.value}")
+        return null
+    }
+
+    if (descMap.cluster == "0001" && descMap.attrId == "0020") {
+        Integer rawValue = Integer.parseInt(descMap.value, 16)
+        BigDecimal volts = rawValue / 10.0
+        sendEvent(name: "batteryVoltage", value: volts, unit: "V",
+            descriptionText: "Battery voltage is ${volts} V")
+        logInfo "batteryVoltage => ${volts} V (raw ${rawValue})"
         return null
     }
 
@@ -317,6 +336,7 @@ def healthCheckStrobe() {
  * IAS Warning Device - Start Warning (cluster 0x0502, comando 0x00).
  * Payload: warning info (1 byte), duração (UINT16 LE), strobe duty cycle (1 byte), strobe level (1 byte).
  * Warning info: bits 7-4 = mode, bits 3-2 = strobe, bits 1-0 = siren level.
+ * Aqui o payload é enviado byte a byte (he cmd), por isso a duração vai em little-endian explícito.
  */
 private List<String> startWarning(String warningInfo, Integer seconds, String strobeDutyCycle, String strobeLevel) {
     return zigbee.command(

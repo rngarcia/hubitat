@@ -1,11 +1,18 @@
 /**
  *  Heiman HS2WD-E Siren — Hubitat Driver
- *  Versão: 1.0.6 — Build: 2026-10-28
+ *  Versão: 1.0.7 — Build: 2026-10-28
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
  *
  *  Changelog:
+ *  v1.0.7 (2026-10-28) - RNG
+ *    - Rotina de diagnóstico de bateria: comando batteryDiagnostics e preferência para executá-lo a cada
+ *      15 min / 30 min / 1 h / 3 h. Lê tensão, percentual e tensão nominal (cluster 0x0001), fonte de energia
+ *      (0x0000:0x0007) e estado do IAS Zone (0x0500: ZoneState, ZoneType, ZoneStatus e endereço CIE)
+ *    - Novos atributos powerSource e zoneStatus; o ZoneStatus é decodificado no log (bits de bateria baixa e falta de energia)
+ *    - Histórico das últimas 48 leituras de tensão em state.voltageHistory
+ *    - Atributos não suportados passam a aparecer no log como "unsupported"
  *  v1.0.6 (2026-10-28) - RNG
  *    - Gravação do atributo maxDuration volta a usar o inteiro direto: o hub já converte a ordem dos bytes
  *      (a v1.0.5 gravava 58880 no aparelho em vez de 230)
@@ -81,12 +88,15 @@ metadata {
 
         command "healthCheckSiren"
         command "healthCheckStrobe"
+        command "batteryDiagnostics"
 
         attribute "maxDuration", "number"
         attribute "hwVer", "string"
         attribute "strobeSupported", "string"
         attribute "lastCheckin", "string"
         attribute "batteryVoltage", "number"
+        attribute "powerSource", "string"
+        attribute "zoneStatus", "string"
 
         // Variante antiga
         fingerprint profileId: "0104",
@@ -120,6 +130,12 @@ metadata {
             range: "10..1000",
             defaultValue: 50,
             required: true
+
+        input name: "batteryDiagInterval", type: "enum",
+            title: "Battery diagnostics routine",
+            description: "Reads battery, power source and IAS Zone attributes on a schedule. Results go to the info log and state.voltageHistory.",
+            options: ["0": "Off", "15": "Every 15 minutes", "30": "Every 30 minutes", "60": "Every hour", "180": "Every 3 hours"],
+            defaultValue: "0"
 
         input name: "infoLogging", type: "bool",
             title: "Enable info logging",
@@ -155,7 +171,35 @@ def updated() {
         runIn(1800, "logsOff")
     }
 
+    scheduleBatteryDiagnostics()
+
     sendZigbeeCommands(configureCmds())
+}
+
+private void scheduleBatteryDiagnostics() {
+    unschedule("batteryDiagnostics")
+
+    String interval = (settings.batteryDiagInterval ?: "0") as String
+
+    switch (interval) {
+        case "15":
+            runEvery15Minutes("batteryDiagnostics")
+            break
+        case "30":
+            runEvery30Minutes("batteryDiagnostics")
+            break
+        case "60":
+            runEvery1Hour("batteryDiagnostics")
+            break
+        case "180":
+            runEvery3Hours("batteryDiagnostics")
+            break
+        default:
+            interval = "0"
+            break
+    }
+
+    logInfo(interval == "0" ? "Battery diagnostics routine: off" : "Battery diagnostics routine: every ${interval} minutes")
 }
 
 def configure() {
@@ -214,11 +258,27 @@ def parse(String description) {
     Map descMap = zigbee.parseDescriptionAsMap(description)
     logDebug "descMap: ${descMap}"
 
+    // Read Attributes Response com status de erro (ex.: 0x86 = atributo não suportado)
+    if (descMap?.command == "01" && descMap?.isClusterSpecific == false && descMap?.data?.size() >= 3 && descMap.data[2] != "00") {
+        logInfo "diag: cluster 0x${descMap.clusterId} attribute 0x${descMap.data[1]}${descMap.data[0]} unsupported (status 0x${descMap.data[2]})"
+        return null
+    }
+
     if (!descMap?.value) return null
 
     if (descMap.cluster == "0000" && descMap.attrId == "0003") {
         sendEvent(name: "hwVer", value: descMap.value,
             descriptionText: "Hardware version is ${descMap.value}")
+        return null
+    }
+
+    // Basic cluster: fonte de energia atual (0x01 = rede elétrica, 0x03 = bateria; bit 0x80 = há bateria de backup)
+    if (descMap.cluster == "0000" && descMap.attrId == "0007") {
+        Integer rawValue = Integer.parseInt(descMap.value, 16)
+        String source = powerSourceName(rawValue)
+        sendEvent(name: "powerSource", value: source,
+            descriptionText: "Power source is ${source}")
+        logInfo "diag: powerSource => ${source} (raw 0x${descMap.value})"
         return null
     }
 
@@ -228,6 +288,39 @@ def parse(String description) {
         sendEvent(name: "batteryVoltage", value: volts, unit: "V",
             descriptionText: "Battery voltage is ${volts} V")
         logInfo "batteryVoltage => ${volts} V (raw ${rawValue})"
+        recordVoltage(volts)
+        return null
+    }
+
+    if (descMap.cluster == "0001" && descMap.attrId == "0034") {
+        Integer rawValue = Integer.parseInt(descMap.value, 16)
+        logInfo "diag: batteryRatedVoltage => ${rawValue / 10.0} V (raw ${rawValue})"
+        return null
+    }
+
+    // IAS Zone (0x0500)
+    if (descMap.cluster == "0500" && descMap.attrId == "0000") {
+        Integer rawValue = Integer.parseInt(descMap.value, 16)
+        logInfo "diag: zoneState => ${rawValue == 1 ? 'enrolled' : 'not enrolled'} (raw ${rawValue})"
+        return null
+    }
+
+    if (descMap.cluster == "0500" && descMap.attrId == "0001") {
+        logInfo "diag: zoneType => 0x${descMap.value} (0x0225 = standard warning device)"
+        return null
+    }
+
+    if (descMap.cluster == "0500" && descMap.attrId == "0002") {
+        Integer rawValue = Integer.parseInt(descMap.value, 16)
+        String hex = String.format("0x%04X", rawValue)
+        sendEvent(name: "zoneStatus", value: hex,
+            descriptionText: "IAS zone status is ${hex}")
+        logInfo "diag: zoneStatus => ${hex} (${zoneStatusFlags(rawValue)})"
+        return null
+    }
+
+    if (descMap.cluster == "0500" && descMap.attrId == "0010") {
+        logInfo "diag: iasCieAddress => ${descMap.value}"
         return null
     }
 
@@ -328,6 +421,35 @@ def healthCheckStrobe() {
     return startWarning("04", seconds, "32", "03")
 }
 
+/**
+ * Rotina de diagnóstico de bateria: lê os atributos que ajudam a entender a bateria e a alimentação.
+ * Resultados no log (prefixo "diag:") e em state.voltageHistory. Também roda no agendamento da preferência
+ * "Battery diagnostics routine".
+ *   0x0000:0x0007  fonte de energia atual
+ *   0x0001:0x0020  tensão (100 mV)      0x0001:0x0021  percentual (0,5 %)
+ *   0x0001:0x0034  tensão nominal (100 mV)
+ *   0x0500:0x0000  ZoneState   0x0500:0x0001  ZoneType   0x0500:0x0002  ZoneStatus   0x0500:0x0010  endereço CIE
+ */
+def batteryDiagnostics() {
+    logInfo "Battery diagnostics: reading power source, battery and IAS Zone attributes"
+    sendZigbeeCommands(batteryDiagnosticsCmds())
+}
+
+private List<String> batteryDiagnosticsCmds() {
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x0000, 0x0007, [:], 500)    // Power source
+    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], 500)    // Battery voltage
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], 500)    // Battery percentage
+    cmds += zigbee.readAttribute(0x0001, 0x0034, [:], 500)    // Battery rated voltage
+    cmds += zigbee.readAttribute(0x0500, 0x0000, [:], 500)    // IAS ZoneState
+    cmds += zigbee.readAttribute(0x0500, 0x0001, [:], 500)    // IAS ZoneType
+    cmds += zigbee.readAttribute(0x0500, 0x0002, [:], 500)    // IAS ZoneStatus
+    cmds += zigbee.readAttribute(0x0500, 0x0010, [:], 500)    // IAS CIE address
+
+    logDebug "batteryDiagnostics cmds: ${cmds}"
+    return cmds
+}
+
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
@@ -376,6 +498,45 @@ private List<String> removeDelayTokens(List<String> cmds) {
     return cmds.findAll { String cmd ->
         cmd && !cmd.toLowerCase().startsWith("delay")
     }
+}
+
+// Guarda as últimas 48 leituras de tensão em state.voltageHistory (visível em "State Variables")
+private void recordVoltage(BigDecimal volts) {
+    String stamp = new Date().format("MM-dd HH:mm", location.timeZone)
+    List<String> history = (state.voltageHistory ?: []) as List<String>
+
+    history << "${stamp} ${volts} V".toString()
+    if (history.size() > 48) history = history[-48..-1]
+
+    state.voltageHistory = history
+}
+
+// Basic cluster PowerSource: bits 0-6 = fonte, bit 7 = bit de bateria de backup
+private String powerSourceName(Integer rawValue) {
+    String name
+
+    switch (rawValue & 0x7F) {
+        case 0x01: name = "mains"; break
+        case 0x02: name = "mains (3-phase)"; break
+        case 0x03: name = "battery"; break
+        case 0x04: name = "DC source"; break
+        case 0x05: name = "emergency mains (constant)"; break
+        case 0x06: name = "emergency mains (transfer switch)"; break
+        default: name = "unknown"; break
+    }
+
+    return (rawValue & 0x80) ? "${name}, backup bit set".toString() : name
+}
+
+// IAS Zone ZoneStatus: bit 3 = bateria baixa, bit 7 = falha de rede elétrica (AC)
+private String zoneStatusFlags(Integer status) {
+    Map flags = [
+        1: "alarm1", 2: "alarm2", 4: "tamper", 8: "battery low",
+        16: "supervision reports", 32: "restore reports", 64: "trouble", 128: "AC (mains) fault"
+    ]
+
+    List<String> active = flags.findAll { bit, label -> (status & bit) != 0 }.values().toList()
+    return active ? active.join(", ") : "no flags set"
 }
 
 private void sendZigbeeCommands(List<String> cmds) {

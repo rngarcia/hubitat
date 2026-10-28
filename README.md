@@ -47,7 +47,7 @@ To install straight from this repository, use **Install → From a URL** with th
 ### Segurança
 | Package | Version | Drivers | Manifest |
 |---|---|---|---|
-| [Heiman HS2WD-E Siren](drivers/heiman-hs2wd-e-siren) | 1.0.6 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/heiman-hs2wd-e-siren/packageManifest.json) |
+| [Heiman HS2WD-E Siren](drivers/heiman-hs2wd-e-siren) | 1.0.7 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/heiman-hs2wd-e-siren/packageManifest.json) |
 | [Hikvision Audible Alarm Trigger (ISAPI)](drivers/hikvision-audible-alarm) | 1.5.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/hikvision-audible-alarm/packageManifest.json) |
 
 ### Eletrodomésticos

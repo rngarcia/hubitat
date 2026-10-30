@@ -1,6 +1,6 @@
 /**
  *  Heiman HS2WD-E Siren — Hubitat Driver
- *  Versão: 1.1.0 — Build: 2026-10-30
+ *  Versão: 1.1.1 — Build: 2026-10-30
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
@@ -11,6 +11,17 @@
  *    - gabriele-v: driver original que serviu de base (Apache 2.0)
  *
  *  Changelog:
+ *  v1.1.1 (2026-10-30) - RNG
+ *    - Migração da preferência maxDuration -> warningDuration corrigida: depois de Save Preferences o novo campo
+ *      já nasce com o valor padrão (240), então a migração antiga nunca rodava e o valor do usuário (ex.: 20 s) se perdia.
+ *      Agora o valor antigo, se existir, prevalece e é usado já nesse mesmo Save
+ *    - configure(): removido o "zdo bind" explícito do cluster 0x0001; o zigbee.configureReporting já envia o seu
+ *      (antes saíam 3 binds). Testado na HS2WD-E: bind e Configure Reporting aceitos (status 0x00)
+ *    - configure(): retirado o enroll response proativo (a v1.1.0 o enviava a cada Configure/Save e, na HS2WD-E
+ *      testada, a sirene passou a repetir o enroll request a cada ~1 s, 56 pedidos em ~1 min); o enroll response
+ *      continua sendo enviado quando a sirene o pede
+ *    - Enroll response enviado sem o delay de 2 s da gravação do CIE (hipótese: a sirene repete o pedido a cada ~1 s e
+ *      descartava a resposta atrasada; 110 pedidos em 4 min foram vistos na v1.1.0 e na v1.1.1 anterior a este ajuste)
  *  v1.1.0 (2026-10-30) - RNG
  *    - Incorpora o fork "Improved" do John Land (changelog dele abaixo, como v1.0.8-fork). Ajustes na incorporação:
  *      o driver mantém o nome "Heiman HS2WD-E Siren" e o importUrl do repositório; o aviso de "NOT enrolled"
@@ -225,18 +236,21 @@ def updated() {
     scheduleBatteryDiagnostics()
 
     sendZigbeeCommands(configureCmds())
+
+    state.remove("pendingWarningDuration")
 }
 
 // v1.0.8: preference maxDuration renamed warningDuration (the old name collided with the maxDuration attribute)
+// After Save Preferences the new field already holds its default (240), so a non-null warningDuration cannot be
+// told apart from a user's choice: when the old setting still exists, its value wins. The migrated value is kept in
+// state only for this run (updateSetting is not visible to settings until the next execution).
 private void migrateSettings() {
-    if (settings.warningDuration == null && settings.maxDuration != null) {
+    if (settings.maxDuration != null) {
         Integer oldValue = clampDuration(settings.maxDuration)
         device.updateSetting("warningDuration", [value: oldValue, type: "number"])
-        logInfo "Migrated preference maxDuration (${oldValue}s) to warningDuration"
-    }
-
-    if (settings.maxDuration != null) {
         device.removeSetting("maxDuration")
+        state.pendingWarningDuration = oldValue
+        logInfo "Migrated preference maxDuration (${oldValue}s) to warningDuration"
     }
 }
 
@@ -283,15 +297,13 @@ private List<String> configureCmds() {
     cmds += zigbee.writeAttribute(0x0502, 0x0000, DataType.UINT16, getDuration())
     cmds += zigbee.readAttribute(0x0502, 0x0000)
 
-    // Battery reporting: bind the Power Configuration cluster and request periodic reports
-    // (1 h minimum, 6 h maximum). Some firmware ignores this; the diagnostics routine remains the fallback.
-    cmds += "zdo bind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0001 {${device.zigbeeId}} {}".toString()
-    cmds += "delay 200"
+    // Battery reporting: periodic reports (1 h minimum, 6 h maximum). zigbee.configureReporting already sends the
+    // zdo bind for the cluster. Some firmware ignores this; the diagnostics routine remains the fallback.
     cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 3600, 21600, 1)    // voltage, 100 mV change
     cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 3600, 21600, 2)    // percentage, 1 % change
 
-    // IAS Zone: enroll response proativo e leitura do estado de enrollment / endereço CIE
-    cmds += zigbee.enrollResponse()
+    // IAS Zone: leitura do estado de enrollment / endereço CIE. O enroll response só é enviado quando a sirene
+    // pede (parse); o envio proativo da v1.1.0 foi retirado porque a sirene passou a repetir o enroll request a cada ~1 s
     cmds += zigbee.readAttribute(0x0500, 0x0000)    // ZoneState
     cmds += zigbee.readAttribute(0x0500, 0x0010)    // IAS CIE address
 
@@ -324,7 +336,11 @@ def parse(String description) {
     // IAS Zone: a sirene repete o enroll request a cada ~5 s até o hub responder
     if (description.startsWith("enroll request")) {
         logDebug "IAS Zone enroll request received - sending enroll response"
-        sendZigbeeCommands(zigbee.enrollResponse())
+        // zigbee.enrollResponse() grava o CIE e espera 2 s antes de enviar a resposta; com a sirene repetindo o pedido
+        // a cada ~1 s a resposta chegava tarde. O CIE já está certo no aparelho, então só o comando de resposta vai, sem delay.
+        List<String> allEnrollCmds = zigbee.enrollResponse()
+        List<String> responseOnly = allEnrollCmds.findAll { String cmd -> cmd.startsWith("he raw") }
+        sendZigbeeCommands(responseOnly ?: allEnrollCmds)
         return null
     }
 
@@ -839,6 +855,8 @@ private void sendZigbeeCommands(List<String> cmds) {
 
 // Duration from the preference (falls back to the pre-1.0.8 preference name during migration)
 private Integer getDuration() {
+    if (state.pendingWarningDuration != null) return clampDuration(state.pendingWarningDuration)
+
     def raw = settings.warningDuration != null ? settings.warningDuration : settings.maxDuration
     return clampDuration(raw)
 }

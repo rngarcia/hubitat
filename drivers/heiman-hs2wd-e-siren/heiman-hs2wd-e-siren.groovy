@@ -1,11 +1,21 @@
 /**
  *  Heiman HS2WD-E Siren — Hubitat Driver
- *  Versão: 1.0.7 — Build: 2026-10-28
+ *  Versão: 1.0.8 — Build: 2026-10-30
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
  *
+ *  Créditos:
+ *    - John Land (@John_Land, Hubitat Community): driver v0.7 para a HS2WD-E, revisão e sugestões da v1.0.8
+ *    - gabriele-v: driver original que serviu de base (Apache 2.0)
+ *
  *  Changelog:
+ *  v1.0.8 (2026-10-30) - RNG
+ *    - Sugestões de revisão do John Land: notificações de mudança de zona (zone status) enviadas pela
+ *      sirene passam a atualizar o atributo zoneStatus e o log; ZoneStatus decodifica também os bits
+ *      8 (test) e 9 (battery defect); leituras 0xFF (inválido no ZCL) de bateria e tensão são ignoradas;
+ *      healthCheckSiren/healthCheckStrobe não rodam enquanto há alarme ativo; o evento do autoOff
+ *      deixa de ser "physical" e passa a "digital"
  *  v1.0.7 (2026-10-28) - RNG
  *    - Rotina de diagnóstico de bateria: comando batteryDiagnostics e preferência para executá-lo a cada
  *      15 min / 30 min / 1 h / 3 h. Lê tensão, percentual e tensão nominal (cluster 0x0001), fonte de energia
@@ -255,6 +265,22 @@ def parse(String description) {
         value: new Date().format("yyyy-MM-dd HH:mm:ss", location.timeZone)
     )
 
+    // IAS Zone: notificação de mudança de status enviada pela sirene (ex.: bateria baixa, falta de energia).
+    // Formato: "zone status 0x0008 -- extended status 0x00"
+    if (description.startsWith("zone status")) {
+        def zoneMatch = (description =~ /zone status 0x([0-9A-Fa-f]+)/)
+        if (zoneMatch.find()) {
+            Integer zoneValue = Integer.parseInt(zoneMatch.group(1), 16)
+            String hex = String.format("0x%04X", zoneValue)
+            sendEvent(name: "zoneStatus", value: hex,
+                descriptionText: "IAS zone status is ${hex}")
+            logInfo "zoneStatus (notification) => ${hex} (${zoneStatusFlags(zoneValue)})"
+        } else {
+            logDebug "zone status notification not parsed: ${description}"
+        }
+        return null
+    }
+
     Map descMap = zigbee.parseDescriptionAsMap(description)
     logDebug "descMap: ${descMap}"
 
@@ -284,6 +310,10 @@ def parse(String description) {
 
     if (descMap.cluster == "0001" && descMap.attrId == "0020") {
         Integer rawValue = Integer.parseInt(descMap.value, 16)
+        if (rawValue == 0xFF) {
+            logInfo "batteryVoltage not reported (0xFF = invalid)"
+            return null
+        }
         BigDecimal volts = rawValue / 10.0
         sendEvent(name: "batteryVoltage", value: volts, unit: "V",
             descriptionText: "Battery voltage is ${volts} V")
@@ -326,6 +356,10 @@ def parse(String description) {
 
     if (descMap.cluster == "0001" && descMap.attrId == "0021") {
         Integer rawValue = Integer.parseInt(descMap.value, 16)
+        if (rawValue == 0xFF) {
+            logInfo "battery percentage not reported (0xFF = invalid)"
+            return null
+        }
         Integer batteryValue = Math.max(0, Math.min(100, Math.round(rawValue / 2.0d) as Integer))
         sendEvent(name: "battery", value: batteryValue, unit: "%",
             descriptionText: "Battery level is ${batteryValue}%")
@@ -400,6 +434,11 @@ def strobe() {
  * Não altera os atributos alarm/switch.
  */
 def healthCheckSiren() {
+    if ((device.currentValue("alarm") ?: "off") != "off") {
+        logInfo "Skipping health-check siren: alarm is active"
+        return []
+    }
+
     Integer offDelayMs = getHealthCheckDelay()
 
     logInfo "Health-check siren: OFF approximately ${offDelayMs} ms after ON"
@@ -413,6 +452,11 @@ def healthCheckSiren() {
 }
 
 def healthCheckStrobe() {
+    if ((device.currentValue("alarm") ?: "off") != "off") {
+        logInfo "Skipping health-check strobe: alarm is active"
+        return []
+    }
+
     Integer seconds = 3
 
     logInfo "Health-check strobe: ${seconds}s at 50% duty cycle"
@@ -487,7 +531,7 @@ private void scheduleAutoOff() {
 // A sirene não reporta o fim do warning; reseta o estado quando a duração expira.
 def autoOff() {
     logInfo "Duration elapsed - state reset to off"
-    setAlarmState("off", "off", "Siren duration elapsed", "physical")
+    setAlarmState("off", "off", "Siren duration elapsed", "digital")
 }
 
 /**
@@ -528,11 +572,13 @@ private String powerSourceName(Integer rawValue) {
     return (rawValue & 0x80) ? "${name}, backup bit set".toString() : name
 }
 
-// IAS Zone ZoneStatus: bit 3 = bateria baixa, bit 7 = falha de rede elétrica (AC)
+// IAS Zone ZoneStatus: bit 3 = bateria baixa, bit 7 = falha de rede elétrica (AC),
+// bit 8 = test, bit 9 = defeito de bateria
 private String zoneStatusFlags(Integer status) {
     Map flags = [
         1: "alarm1", 2: "alarm2", 4: "tamper", 8: "battery low",
-        16: "supervision reports", 32: "restore reports", 64: "trouble", 128: "AC (mains) fault"
+        16: "supervision reports", 32: "restore reports", 64: "trouble", 128: "AC (mains) fault",
+        256: "test", 512: "battery defect"
     ]
 
     List<String> active = flags.findAll { bit, label -> (status & bit) != 0 }.values().toList()

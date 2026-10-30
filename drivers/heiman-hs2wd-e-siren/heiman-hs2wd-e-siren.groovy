@@ -1,21 +1,43 @@
 /**
  *  Heiman HS2WD-E Siren — Hubitat Driver
- *  Versão: 1.0.8 — Build: 2026-10-30
+ *  Versão: 1.1.0 — Build: 2026-10-30
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
  *
  *  Créditos:
- *    - John Land (@John_Land, Hubitat Community): driver v0.7 para a HS2WD-E, revisão e sugestões da v1.0.8
+ *    - John Land (@John_Land, Hubitat Community): driver v0.7 para a HS2WD-E, revisão e o fork "Improved"
+ *      que originou a maior parte das mudanças da v1.1.0
  *    - gabriele-v: driver original que serviu de base (Apache 2.0)
  *
  *  Changelog:
+ *  v1.1.0 (2026-10-30) - RNG
+ *    - Incorpora o fork "Improved" do John Land (changelog dele abaixo, como v1.0.8-fork). Ajustes na incorporação:
+ *      o driver mantém o nome "Heiman HS2WD-E Siren" e o importUrl do repositório; o aviso de "NOT enrolled"
+ *      virou info, porque esta sirene responde a comandos com ZoneState 0 mesmo depois do enroll response
  *  v1.0.8 (2026-10-30) - RNG
- *    - Sugestões de revisão do John Land: notificações de mudança de zona (zone status) enviadas pela
- *      sirene passam a atualizar o atributo zoneStatus e o log; ZoneStatus decodifica também os bits
- *      8 (test) e 9 (battery defect); leituras 0xFF (inválido no ZCL) de bateria e tensão são ignoradas;
- *      healthCheckSiren/healthCheckStrobe não rodam enquanto há alarme ativo; o evento do autoOff
- *      deixa de ser "physical" e passa a "digital"
+ *    - Sugestões de revisão do John Land: notificações de mudança de zona, bits 8 (test) e 9 (battery defect),
+ *      leituras 0xFF ignoradas, health checks pulados com alarme ativo, evento do autoOff "digital"
+ *  v1.0.8-fork (2026-10-29) - John Land, "Improved" fork, merged from a code review of v1.0.7
+ *    - Driver renamed "Heiman HS2WD-E Siren Improved" so it can coexist with older drivers; importUrl removed
+ *      so the Import button cannot overwrite this fork with the upstream version
+ *    - New commands sirenOn / sirenOff / strobeOn / strobeOff (buttons "Siren On", "Siren Off", "Strobe On",
+ *      "Strobe Off"). ON adds that component to whatever is already running; OFF removes it and keeps the
+ *      other component running for the remaining time. The Alarm capability's Siren/Strobe/Both/Off keep
+ *      their standard behavior for HSM and rules
+ *    - Preference maxDuration renamed warningDuration (it shared a name with the maxDuration attribute);
+ *      an existing value is migrated automatically on Save Preferences
+ *    - Warning duration and the autoOff timer use the smaller of the preference and the device-reported
+ *      maxDuration attribute, so the alarm state matches what the device actually does
+ *    - Health checks are skipped while a real alarm is active (they would silence or replace it)
+ *    - IAS Zone status change notifications are parsed ("zone status" messages and cluster 0x0500 cmd 0x00);
+ *      new attribute zoneFlags; warning logged when battery low, battery defect or AC fault is set
+ *    - ZoneStatus decoding adds bit 8 (test) and bit 9 (battery defect)
+ *    - Battery voltage, percentage and rated voltage of 0xFF are treated as "not reported" instead of 25.5 V / 100 %
+ *    - configure() binds the Power Configuration cluster and configures battery reporting, sends an enroll
+ *      response, and reads ZoneState and the CIE address; the CIE address is compared with the hub's EUI
+ *    - Logs rejected attribute writes, reporting configuration results and IAS WD commands the device rejects
+ *    - autoOff event type changed from "physical" to "digital"
  *  v1.0.7 (2026-10-28) - RNG
  *    - Rotina de diagnóstico de bateria: comando batteryDiagnostics e preferência para executá-lo a cada
  *      15 min / 30 min / 1 h / 3 h. Lê tensão, percentual e tensão nominal (cluster 0x0001), fonte de energia
@@ -68,6 +90,8 @@
  *    - Atualizações Hubitat: OpenAI, com base em testes de John Land
  *    - Post: https://community.hubitat.com/t/heiman-hs2wd-e-zigbee-siren-driver-updated-2026-08-03/165500
  *
+ *  v1.0.8-fork "Improved": changes from a code review of v1.0.7 by John Land (see changelog above).
+ *
  *  Copyright 2019 gabriele-v
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -80,7 +104,16 @@
  *  for the specific language governing permissions and limitations under the License.
  */
 
+import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
+
+// IAS WD Start Warning parameters per alarm mode.
+// Warning info: bits 7-4 = mode, bits 3-2 = strobe, bits 1-0 = siren level.
+@Field static final Map WARNING_MODES = [
+    siren : [info: "13", duty: "00", level: "00", text: "Siren on"],             // burglar, no strobe, very high
+    strobe: [info: "04", duty: "32", level: "03", text: "Strobe on"],            // no sound, strobe, 50 % duty
+    both  : [info: "17", duty: "32", level: "03", text: "Siren and strobe on"]   // burglar, strobe, very high
+]
 
 metadata {
     definition(
@@ -96,6 +129,10 @@ metadata {
         capability "Refresh"
         capability "Configuration"
 
+        command "sirenOn"
+        command "sirenOff"
+        command "strobeOn"
+        command "strobeOff"
         command "healthCheckSiren"
         command "healthCheckStrobe"
         command "batteryDiagnostics"
@@ -107,6 +144,7 @@ metadata {
         attribute "batteryVoltage", "number"
         attribute "powerSource", "string"
         attribute "zoneStatus", "string"
+        attribute "zoneFlags", "string"
 
         // Variante antiga
         fingerprint profileId: "0104",
@@ -128,8 +166,9 @@ metadata {
     }
 
     preferences {
-        input name: "maxDuration", type: "number",
-            title: "Max duration of siren/strobe (seconds)",
+        input name: "warningDuration", type: "number",
+            title: "Duration of siren/strobe (seconds)",
+            description: "The device also enforces its own maximum (maxDuration attribute); the shorter of the two is used.",
             range: "1..600",
             defaultValue: 240,
             required: true
@@ -172,7 +211,9 @@ def installed() {
 }
 
 def updated() {
-    logInfo "Updated - maxDuration=${getDuration()}s"
+    migrateSettings()
+
+    logInfo "Updated - warningDuration=${getDuration()}s"
 
     sendEvent(name: "strobeSupported", value: "supported")
 
@@ -184,6 +225,19 @@ def updated() {
     scheduleBatteryDiagnostics()
 
     sendZigbeeCommands(configureCmds())
+}
+
+// v1.0.8: preference maxDuration renamed warningDuration (the old name collided with the maxDuration attribute)
+private void migrateSettings() {
+    if (settings.warningDuration == null && settings.maxDuration != null) {
+        Integer oldValue = clampDuration(settings.maxDuration)
+        device.updateSetting("warningDuration", [value: oldValue, type: "number"])
+        logInfo "Migrated preference maxDuration (${oldValue}s) to warningDuration"
+    }
+
+    if (settings.maxDuration != null) {
+        device.removeSetting("maxDuration")
+    }
 }
 
 private void scheduleBatteryDiagnostics() {
@@ -224,9 +278,23 @@ def refresh() {
 
 private List<String> configureCmds() {
     List<String> cmds = []
+
     // O hub converte o inteiro para a ordem de bytes do ZCL (ex.: 230 sai como {00E6})
     cmds += zigbee.writeAttribute(0x0502, 0x0000, DataType.UINT16, getDuration())
     cmds += zigbee.readAttribute(0x0502, 0x0000)
+
+    // Battery reporting: bind the Power Configuration cluster and request periodic reports
+    // (1 h minimum, 6 h maximum). Some firmware ignores this; the diagnostics routine remains the fallback.
+    cmds += "zdo bind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0001 {${device.zigbeeId}} {}".toString()
+    cmds += "delay 200"
+    cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 3600, 21600, 1)    // voltage, 100 mV change
+    cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 3600, 21600, 2)    // percentage, 1 % change
+
+    // IAS Zone: enroll response proativo e leitura do estado de enrollment / endereço CIE
+    cmds += zigbee.enrollResponse()
+    cmds += zigbee.readAttribute(0x0500, 0x0000)    // ZoneState
+    cmds += zigbee.readAttribute(0x0500, 0x0010)    // IAS CIE address
+
     cmds += refreshCmds()
 
     logDebug "configure cmds: ${cmds}"
@@ -265,18 +333,11 @@ def parse(String description) {
         value: new Date().format("yyyy-MM-dd HH:mm:ss", location.timeZone)
     )
 
-    // IAS Zone: notificação de mudança de status enviada pela sirene (ex.: bateria baixa, falta de energia).
-    // Formato: "zone status 0x0008 -- extended status 0x00"
+    // IAS Zone Status Change Notification sent by the device on its own (battery low, AC fault, ...)
     if (description.startsWith("zone status")) {
-        def zoneMatch = (description =~ /zone status 0x([0-9A-Fa-f]+)/)
-        if (zoneMatch.find()) {
-            Integer zoneValue = Integer.parseInt(zoneMatch.group(1), 16)
-            String hex = String.format("0x%04X", zoneValue)
-            sendEvent(name: "zoneStatus", value: hex,
-                descriptionText: "IAS zone status is ${hex}")
-            logInfo "zoneStatus (notification) => ${hex} (${zoneStatusFlags(zoneValue)})"
-        } else {
-            logDebug "zone status notification not parsed: ${description}"
+        def matcher = description =~ /zone status 0x([0-9A-Fa-f]{4})/
+        if (matcher.find()) {
+            handleZoneStatus(Integer.parseInt(matcher.group(1), 16), "notification")
         }
         return null
     }
@@ -284,22 +345,32 @@ def parse(String description) {
     Map descMap = zigbee.parseDescriptionAsMap(description)
     logDebug "descMap: ${descMap}"
 
-    // Read Attributes Response com status de erro (ex.: 0x86 = atributo não suportado)
-    if (descMap?.command == "01" && descMap?.isClusterSpecific == false && descMap?.data?.size() >= 3 && descMap.data[2] != "00") {
-        logInfo "diag: cluster 0x${descMap.clusterId} attribute 0x${descMap.data[1]}${descMap.data[0]} unsupported (status 0x${descMap.data[2]})"
+    if (!descMap) return null
+
+    String clusterId = (descMap.clusterId ?: descMap.cluster) as String
+
+    // Zone Status Change Notification that arrives as a catchall instead of a "zone status" message
+    if (descMap.isClusterSpecific == true && clusterId == "0500" && descMap.command == "00" && descMap.data?.size() >= 2) {
+        handleZoneStatus(Integer.parseInt(descMap.data[1] + descMap.data[0], 16), "notification")
         return null
     }
 
-    if (!descMap?.value) return null
+    // Global ZCL responses: read errors, write results, reporting configuration, default responses
+    if (descMap.isClusterSpecific == false && descMap.profileId != "0000" &&
+        descMap.command in ["01", "04", "07", "0B"] && descMap.data) {
+        if (handleGlobalResponse(clusterId, descMap)) return null
+    }
 
-    if (descMap.cluster == "0000" && descMap.attrId == "0003") {
+    if (!descMap.value) return null
+
+    if (clusterId == "0000" && descMap.attrId == "0003") {
         sendEvent(name: "hwVer", value: descMap.value,
             descriptionText: "Hardware version is ${descMap.value}")
         return null
     }
 
     // Basic cluster: fonte de energia atual (0x01 = rede elétrica, 0x03 = bateria; bit 0x80 = há bateria de backup)
-    if (descMap.cluster == "0000" && descMap.attrId == "0007") {
+    if (clusterId == "0000" && descMap.attrId == "0007") {
         Integer rawValue = Integer.parseInt(descMap.value, 16)
         String source = powerSourceName(rawValue)
         sendEvent(name: "powerSource", value: source,
@@ -308,10 +379,10 @@ def parse(String description) {
         return null
     }
 
-    if (descMap.cluster == "0001" && descMap.attrId == "0020") {
+    if (clusterId == "0001" && descMap.attrId == "0020") {
         Integer rawValue = Integer.parseInt(descMap.value, 16)
         if (rawValue == 0xFF) {
-            logInfo "batteryVoltage not reported (0xFF = invalid)"
+            logInfo "diag: battery voltage not reported by the device (0xFF)"
             return null
         }
         BigDecimal volts = rawValue / 10.0
@@ -322,42 +393,10 @@ def parse(String description) {
         return null
     }
 
-    if (descMap.cluster == "0001" && descMap.attrId == "0034") {
-        Integer rawValue = Integer.parseInt(descMap.value, 16)
-        logInfo "diag: batteryRatedVoltage => ${rawValue / 10.0} V (raw ${rawValue})"
-        return null
-    }
-
-    // IAS Zone (0x0500)
-    if (descMap.cluster == "0500" && descMap.attrId == "0000") {
-        Integer rawValue = Integer.parseInt(descMap.value, 16)
-        logInfo "diag: zoneState => ${rawValue == 1 ? 'enrolled' : 'not enrolled'} (raw ${rawValue})"
-        return null
-    }
-
-    if (descMap.cluster == "0500" && descMap.attrId == "0001") {
-        logInfo "diag: zoneType => 0x${descMap.value} (0x0225 = standard warning device)"
-        return null
-    }
-
-    if (descMap.cluster == "0500" && descMap.attrId == "0002") {
-        Integer rawValue = Integer.parseInt(descMap.value, 16)
-        String hex = String.format("0x%04X", rawValue)
-        sendEvent(name: "zoneStatus", value: hex,
-            descriptionText: "IAS zone status is ${hex}")
-        logInfo "diag: zoneStatus => ${hex} (${zoneStatusFlags(rawValue)})"
-        return null
-    }
-
-    if (descMap.cluster == "0500" && descMap.attrId == "0010") {
-        logInfo "diag: iasCieAddress => ${descMap.value}"
-        return null
-    }
-
-    if (descMap.cluster == "0001" && descMap.attrId == "0021") {
+    if (clusterId == "0001" && descMap.attrId == "0021") {
         Integer rawValue = Integer.parseInt(descMap.value, 16)
         if (rawValue == 0xFF) {
-            logInfo "battery percentage not reported (0xFF = invalid)"
+            logInfo "diag: battery percentage not reported by the device (0xFF)"
             return null
         }
         Integer batteryValue = Math.max(0, Math.min(100, Math.round(rawValue / 2.0d) as Integer))
@@ -367,15 +406,128 @@ def parse(String description) {
         return null
     }
 
-    if (descMap.cluster == "0502" && descMap.attrId == "0000") {
+    if (clusterId == "0001" && descMap.attrId == "0034") {
+        Integer rawValue = Integer.parseInt(descMap.value, 16)
+        if (rawValue == 0xFF) {
+            logInfo "diag: battery rated voltage not reported by the device (0xFF)"
+            return null
+        }
+        logInfo "diag: batteryRatedVoltage => ${rawValue / 10.0} V (raw ${rawValue})"
+        return null
+    }
+
+    // IAS Zone (0x0500)
+    if (clusterId == "0500" && descMap.attrId == "0000") {
+        Integer rawValue = Integer.parseInt(descMap.value, 16)
+        // Na HS2WD-E testada o ZoneState fica em 0 mesmo com a sirene respondendo a todos os comandos,
+        // então isto é só informativo (não é um aviso)
+        logInfo "diag: zoneState => ${rawValue == 1 ? 'enrolled' : 'not enrolled'} (raw ${rawValue})"
+        return null
+    }
+
+    if (clusterId == "0500" && descMap.attrId == "0001") {
+        logInfo "diag: zoneType => 0x${descMap.value} (0x0225 = standard warning device)"
+        return null
+    }
+
+    if (clusterId == "0500" && descMap.attrId == "0002") {
+        handleZoneStatus(Integer.parseInt(descMap.value, 16), "read")
+        return null
+    }
+
+    if (clusterId == "0500" && descMap.attrId == "0010") {
+        String match = compareCieAddress(descMap.value)
+        String msg = "diag: iasCieAddress => ${descMap.value} (${match})"
+        if (match.startsWith("does NOT")) {
+            logWarn(msg)
+        } else {
+            logInfo(msg)
+        }
+        return null
+    }
+
+    if (clusterId == "0502" && descMap.attrId == "0000") {
         Integer durationValue = Integer.parseInt(descMap.value, 16)
         sendEvent(name: "maxDuration", value: durationValue, unit: "s",
             descriptionText: "Max siren/strobe duration is ${durationValue}s")
         logInfo "maxDuration => ${durationValue}s"
+        if (durationValue < getDuration()) {
+            logWarn "Device maxDuration (${durationValue}s) is shorter than the warningDuration preference (${getDuration()}s); alarms will last ${durationValue}s"
+        }
         return null
     }
 
     return null
+}
+
+/**
+ * Handles global (non cluster-specific) ZCL responses. Returns true when the message was fully handled.
+ *   0x01 Read Attributes Response (error status only; successes arrive as "read attr" messages)
+ *   0x04 Write Attributes Response
+ *   0x07 Configure Reporting Response
+ *   0x0B Default Response
+ */
+private boolean handleGlobalResponse(String clusterId, Map descMap) {
+    List<String> data = descMap.data as List<String>
+
+    switch (descMap.command) {
+        case "01":
+            // Read Attributes Response com status de erro (ex.: 0x86 = atributo não suportado)
+            if (data.size() >= 3 && data[2] != "00") {
+                logInfo "diag: cluster 0x${clusterId} attribute 0x${data[1]}${data[0]} unsupported (status 0x${data[2]})"
+                return true
+            }
+            return false
+
+        case "04":
+            if (data[0] == "00") {
+                logDebug "Write accepted on cluster 0x${clusterId}"
+            } else {
+                String attr = data.size() >= 3 ? "0x${data[2]}${data[1]}" : "unknown"
+                logWarn "Device rejected write to cluster 0x${clusterId} attribute ${attr} (status 0x${data[0]})"
+                if (clusterId == "0502") {
+                    logWarn "maxDuration write failed - alarm timing will follow the device's reported maxDuration"
+                }
+            }
+            return true
+
+        case "07":
+            if (data.size() == 1 && data[0] == "00") {
+                logInfo "Reporting configured on cluster 0x${clusterId}"
+            } else {
+                logInfo("diag: reporting configuration on cluster 0x${clusterId} rejected (data ${data}) - " +
+                    "the battery diagnostics routine remains the fallback")
+            }
+            return true
+
+        case "0B":
+            if (data.size() >= 2 && data[1] != "00") {
+                logWarn "Device rejected command 0x${data[0]} on cluster 0x${clusterId} (status 0x${data[1]})"
+            } else {
+                logDebug "Default response on cluster 0x${clusterId}: ${data}"
+            }
+            return true
+    }
+
+    return false
+}
+
+private void handleZoneStatus(Integer status, String source) {
+    String hex = String.format("0x%04X", status)
+    String flags = zoneStatusFlags(status)
+    boolean changed = device.currentValue("zoneStatus") != hex
+
+    sendEvent(name: "zoneStatus", value: hex, descriptionText: "IAS zone status is ${hex}")
+    sendEvent(name: "zoneFlags", value: flags, descriptionText: "IAS zone flags: ${flags}")
+
+    String msg = "diag: zoneStatus (${source}) => ${hex} (${flags})"
+
+    // 0x0288 = battery low (bit 3) | AC fault (bit 7) | battery defect (bit 9)
+    if (changed && (status & 0x0288)) {
+        logWarn msg
+    } else {
+        logInfo msg
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -389,55 +541,71 @@ def on() {
 def off() {
     logInfo "Turning off"
 
-    unschedule("autoOff")
+    clearWarningState()
     setAlarmState("off", "off", "Siren off")
 
     return stopWarningCmd()
 }
 
+// Alarm capability commands: standard behavior (each replaces whatever is running)
 def siren() {
-    logInfo "Turning siren on (${getDuration()}s)"
-
-    setAlarmState("siren", "on", "Siren on")
-    scheduleAutoOff()
-
-    // 0x13: warning mode burglar + sem strobe + siren level 3 (very high)
-    return startWarning("13", getDuration(), "00", "00")
-}
-
-def both() {
-    logInfo "Turning siren + strobe on (${getDuration()}s)"
-
-    setAlarmState("both", "on", "Siren and strobe on")
-    scheduleAutoOff()
-
-    // 0x17: warning mode burglar + strobe + siren level 3 (very high)
-    // duty cycle 0x32, strobe level 0x03
-    return startWarning("17", getDuration(), "32", "03")
+    return startAlarm("siren")
 }
 
 def strobe() {
-    logInfo "Turning strobe on (${getDuration()}s)"
+    return startAlarm("strobe")
+}
 
-    setAlarmState("strobe", "on", "Strobe on")
-    scheduleAutoOff()
+def both() {
+    return startAlarm("both")
+}
 
-    // 0x04: sem som (mode Stop) + strobe habilitado
-    // duty cycle 0x32, strobe level 0x03
-    return startWarning("04", getDuration(), "32", "03")
+// Siren On: adds the siren to whatever is running (strobe running => both)
+def sirenOn() {
+    return startAlarm(isStrobeActive() ? "both" : "siren")
+}
+
+// Strobe On: adds the strobe to whatever is running (siren running => both)
+def strobeOn() {
+    return startAlarm(isSirenActive() ? "both" : "strobe")
+}
+
+// Siren Off: removes the siren; a running strobe continues for the remaining time
+def sirenOff() {
+    String current = getActiveAlarm()
+
+    if (current == "both") return continueAlarm("strobe")
+
+    if (current == "strobe") {
+        logInfo "Siren Off: siren is not active (strobe keeps running)"
+        return []
+    }
+
+    return off()
+}
+
+// Strobe Off: removes the strobe; a running siren continues for the remaining time
+def strobeOff() {
+    String current = getActiveAlarm()
+
+    if (current == "both") return continueAlarm("siren")
+
+    if (current == "siren") {
+        logInfo "Strobe Off: strobe is not active (siren keeps running)"
+        return []
+    }
+
+    return off()
 }
 
 /**
  * Chirp curto: liga a sirene por 1 s (fallback de segurança caso o OFF se perca)
  * e envia OFF explícito após o delay configurado (padrão 50 ms).
  * A duração audível real pode ser maior: Zigbee e o processamento do aparelho não são tempo real.
- * Não altera os atributos alarm/switch.
+ * Não altera os atributos alarm/switch. Ignorado enquanto um alarme real estiver ativo.
  */
 def healthCheckSiren() {
-    if ((device.currentValue("alarm") ?: "off") != "off") {
-        logInfo "Skipping health-check siren: alarm is active"
-        return []
-    }
+    if (skipBecauseAlarmActive("Health-check siren")) return []
 
     Integer offDelayMs = getHealthCheckDelay()
 
@@ -446,16 +614,13 @@ def healthCheckSiren() {
     List<String> startCmd = removeDelayTokens(startWarning("13", 1, "00", "00"))
     List<String> stopCmd = removeDelayTokens(stopWarningCmd())
 
-    List<String> cmds = startCmd + ["delay ${offDelayMs}"] + stopCmd
+    List<String> cmds = startCmd + ["delay ${offDelayMs}".toString()] + stopCmd
     logDebug "healthCheckSiren cmds: ${cmds}"
     return cmds
 }
 
 def healthCheckStrobe() {
-    if ((device.currentValue("alarm") ?: "off") != "off") {
-        logInfo "Skipping health-check strobe: alarm is active"
-        return []
-    }
+    if (skipBecauseAlarmActive("Health-check strobe")) return []
 
     Integer seconds = 3
 
@@ -495,6 +660,86 @@ private List<String> batteryDiagnosticsCmds() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Alarm state                                                        */
+/* ------------------------------------------------------------------ */
+
+// Starts a warning in the given mode for the full effective duration.
+private List<String> startAlarm(String mode) {
+    Integer seconds = getEffectiveDuration()
+    logInfo "Turning ${mode} on (${seconds}s)"
+    return runWarning(mode, seconds)
+}
+
+// Replaces the running warning with the given mode for the time that is left.
+private List<String> continueAlarm(String mode) {
+    Integer remaining = getRemainingSeconds()
+
+    if (remaining < 1) return off()
+
+    logInfo "Switching to ${mode} only for the remaining ${remaining}s"
+    return runWarning(mode, remaining)
+}
+
+private List<String> runWarning(String mode, Integer seconds) {
+    Map params = WARNING_MODES[mode]
+
+    setAlarmState(mode, "on", params.text as String)
+    state.warningEndsAt = now() + seconds * 1000L
+    runIn(seconds, "autoOff", [overwrite: true])
+
+    return startWarning(params.info as String, seconds, params.duty as String, params.level as String)
+}
+
+// Current alarm mode; "off" when the warning time has elapsed or is unknown.
+private String getActiveAlarm() {
+    String current = (device.currentValue("alarm") ?: "off") as String
+    if (current != "off" && getRemainingSeconds() < 1) return "off"
+    return current
+}
+
+private boolean isSirenActive() {
+    return getActiveAlarm() in ["siren", "both"]
+}
+
+private boolean isStrobeActive() {
+    return getActiveAlarm() in ["strobe", "both"]
+}
+
+private Integer getRemainingSeconds() {
+    Long endsAt = state.warningEndsAt as Long
+    if (!endsAt) return 0
+
+    Integer seconds = Math.ceil((endsAt - now()) / 1000.0d) as Integer
+    return Math.max(0, seconds)
+}
+
+private boolean skipBecauseAlarmActive(String name) {
+    String current = getActiveAlarm()
+    if (current != "off") {
+        logInfo "${name} skipped: alarm is active (${current})"
+        return true
+    }
+    return false
+}
+
+private void clearWarningState() {
+    unschedule("autoOff")
+    state.remove("warningEndsAt")
+}
+
+private void setAlarmState(String alarmValue, String switchValue, String text) {
+    sendEvent(name: "alarm", value: alarmValue, descriptionText: text, type: "digital")
+    sendEvent(name: "switch", value: switchValue, descriptionText: text, type: "digital")
+}
+
+// A sirene não reporta o fim do warning; reseta o estado quando a duração expira.
+def autoOff() {
+    logInfo "Duration elapsed - state reset to off"
+    clearWarningState()
+    setAlarmState("off", "off", "Siren duration elapsed")
+}
+
+/* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -517,21 +762,6 @@ private List<String> startWarning(String warningInfo, Integer seconds, String st
 
 private List<String> stopWarningCmd() {
     return zigbee.command(0x0502, 0x00, "00", "0000", "00", "00")
-}
-
-private void setAlarmState(String alarmValue, String switchValue, String text, String eventType = "digital") {
-    sendEvent(name: "alarm", value: alarmValue, descriptionText: text, type: eventType)
-    sendEvent(name: "switch", value: switchValue, descriptionText: text, type: eventType)
-}
-
-private void scheduleAutoOff() {
-    runIn(getDuration(), "autoOff", [overwrite: true])
-}
-
-// A sirene não reporta o fim do warning; reseta o estado quando a duração expira.
-def autoOff() {
-    logInfo "Duration elapsed - state reset to off"
-    setAlarmState("off", "off", "Siren duration elapsed", "digital")
 }
 
 /**
@@ -572,8 +802,7 @@ private String powerSourceName(Integer rawValue) {
     return (rawValue & 0x80) ? "${name}, backup bit set".toString() : name
 }
 
-// IAS Zone ZoneStatus: bit 3 = bateria baixa, bit 7 = falha de rede elétrica (AC),
-// bit 8 = test, bit 9 = defeito de bateria
+// IAS Zone ZoneStatus: bit 3 = bateria baixa, bit 7 = falha de rede elétrica (AC), bit 9 = bateria com defeito
 private String zoneStatusFlags(Integer status) {
     Map flags = [
         1: "alarm1", 2: "alarm2", 4: "tamper", 8: "battery low",
@@ -585,21 +814,65 @@ private String zoneStatusFlags(Integer status) {
     return active ? active.join(", ") : "no flags set"
 }
 
+// Compares the device's IAS CIE address with the hub's Zigbee EUI (either byte order).
+private String compareCieAddress(String value) {
+    try {
+        String hub = ((location.hub?.zigbeeEui ?: "") as String).toUpperCase().replaceAll(/[^0-9A-F]/, "")
+        String cie = (value ?: "").toUpperCase().replaceAll(/[^0-9A-F]/, "")
+
+        if (!hub) return "hub EUI unavailable for comparison"
+        if (cie == hub) return "matches hub"
+
+        String reversed = cie.findAll(/../).reverse().join()
+        if (reversed == hub) return "matches hub, reversed byte order"
+
+        return "does NOT match hub EUI ${hub}"
+    } catch (Exception e) {
+        return "could not compare with hub EUI: ${e.message}"
+    }
+}
+
 private void sendZigbeeCommands(List<String> cmds) {
     logDebug "sendZigbeeCommands: ${cmds}"
     sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
 }
 
+// Duration from the preference (falls back to the pre-1.0.8 preference name during migration)
 private Integer getDuration() {
+    def raw = settings.warningDuration != null ? settings.warningDuration : settings.maxDuration
+    return clampDuration(raw)
+}
+
+private Integer clampDuration(raw) {
     Integer duration = 240
 
     try {
-        duration = (settings.maxDuration ?: 240) as Integer
+        if (raw != null) duration = raw as Integer
     } catch (Exception ignored) {
         duration = 240
     }
 
     return Math.max(1, Math.min(600, duration))
+}
+
+// The device caps every warning at its MaxDuration attribute, so use the shorter of the two.
+private Integer getEffectiveDuration() {
+    Integer duration = getDuration()
+    Integer reported = null
+
+    try {
+        def current = device.currentValue("maxDuration")
+        if (current != null) reported = current as Integer
+    } catch (Exception ignored) {
+        reported = null
+    }
+
+    if (reported != null && reported > 0 && reported < duration) {
+        logDebug "Using device maxDuration ${reported}s instead of preference ${duration}s"
+        return reported
+    }
+
+    return duration
 }
 
 private Integer getHealthCheckDelay() {
@@ -634,4 +907,8 @@ private void logDebug(String msg) {
 
 private void logInfo(String msg) {
     if (settings.infoLogging != false) log.info "${device.displayName}: ${msg}"
+}
+
+private void logWarn(String msg) {
+    log.warn "${device.displayName}: ${msg}"
 }

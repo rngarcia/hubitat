@@ -13,7 +13,7 @@ Zigbee driver for the Heiman HS2WD-E siren: alarm, strobe and tone control.
 
 ## Credits
 
-- [John Land](https://community.hubitat.com/u/John_Land): HS2WD-E driver v0.7, device analysis and the review behind v1.0.8.
+- [John Land](https://community.hubitat.com/u/John_Land): HS2WD-E driver v0.7, device analysis, the review behind v1.0.8 and the "Improved" fork that v1.1.0 is built on.
 - gabriele-v: original driver this work builds on (Apache 2.0).
 
 Discussion thread: [Heiman HS2WD-E Zigbee siren driver](https://community.hubitat.com/t/heiman-hs2wd-e-zigbee-siren-driver-updated-2026-08-03/165500)

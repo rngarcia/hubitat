@@ -39,6 +39,7 @@ To install straight from this repository, use **Install → From a URL** with th
 |---|---|---|---|
 | [Aeon Smart Dimmer 2nd Edition](drivers/aeon-smart-dimmer-2nd) | 1.0.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-smart-dimmer-2nd/packageManifest.json) |
 | [Aeon Micro Dimmer with Power Meter](drivers/aeon-micro-dimmer-power-meter) | 1.0.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-micro-dimmer-power-meter/packageManifest.json) |
+| [Aeotec Dual Nano Switch with Power Meter](drivers/aeotec-dual-nano-switch-power-meter) | 1.0.0 | 2 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeotec-dual-nano-switch-power-meter/packageManifest.json) |
 
 ### Sensores
 | Package | Version | Drivers | Manifest |

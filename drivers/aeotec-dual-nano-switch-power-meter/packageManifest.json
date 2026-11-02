@@ -1,0 +1,38 @@
+{
+  "packageName": "Aeotec Dual Nano Switch with Power Meter",
+  "author": "Ricardo Nogueira Garcia",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-11-02",
+  "category": "Integrations",
+  "tags": [
+    "Z-Wave",
+    "Lighting",
+    "Energy Monitoring"
+  ],
+  "releaseNotes": "v1.0.0: first release. Parent driver plus a child driver per channel (Switch + Power Meter + Energy Meter) for the Aeotec Dual Nano Switch ZW132. Power and energy are polled per channel through Z-Wave Multi Channel; no automatic report parameters are changed. The recreateChildren command replaces the children created by the native driver (their Type cannot be changed in the UI); device ids change. Verified on two ZW132 units. A ZW140 (no Meter class) is detected and not polled.",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/aeotec-dual-nano-switch-power-meter#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "a3ba49d1-0531-4879-9dc0-e6bbc71c5afb",
+      "name": "Aeotec Dual Nano Switch with Power Meter",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeotec-dual-nano-switch-power-meter/aeotec-dual-nano-switch-power-meter.groovy",
+      "required": true
+    },
+    {
+      "id": "1dae5deb-b8ec-4620-b2f6-637a3b3850f3",
+      "name": "Aeotec Dual Nano Switch Channel",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeotec-dual-nano-switch-power-meter/aeotec-dual-nano-switch-channel.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Iluminação e tomadas",
+    "order": 3,
+    "description": "Z-Wave driver for the Aeotec Dual Nano Switch (ZW132): a child per channel with switch, power (W) and energy (kWh).",
+    "packageId": "a32694c9-cb9e-44f9-85e5-73a60fbada46"
+  }
+}

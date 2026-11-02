@@ -108,6 +108,18 @@
       ]
     },
     {
+      "id": "a32694c9-cb9e-44f9-85e5-73a60fbada46",
+      "name": "Aeotec Dual Nano Switch with Power Meter",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeotec-dual-nano-switch-power-meter/packageManifest.json",
+      "description": "Z-Wave driver for the Aeotec Dual Nano Switch (ZW132): a child per channel with switch, power (W) and energy (kWh).",
+      "tags": [
+        "Z-Wave",
+        "Lighting",
+        "Energy Monitoring"
+      ]
+    },
+    {
       "id": "625fbf28-8a56-4fb6-9d7f-4ef0cc32a795",
       "name": "Aeon Multisensor Gen5",
       "category": "Integrations",

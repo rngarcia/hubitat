@@ -1,6 +1,6 @@
 /**
  *  Aeon Micro Dimmer with Power Meter — Hubitat Driver
- *  Versão: 1.0.0 — Build: 2026-11-02
+ *  Versão: 1.0.1 — Build: 2026-11-02
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *
@@ -18,7 +18,8 @@
  *  classe de comando Meter (0x32) e responde a MeterGet com potencia (W) e energia acumulada (kWh). Este driver
  *  expoe esses valores como Power Meter / Energy Meter.
  *
- *  O QUE FOI VERIFICADO (1 unidade, Z-Wave manufacturer 0x0086, product type 0x0003, product id 0x0013)
+ *  O QUE FOI VERIFICADO (2 unidades com a mesma identificacao: Z-Wave manufacturer 0x0086, product type 0x0003,
+ *  product id 0x0013; a maior parte dos testes de reporte automatico foi feita em uma delas)
  *  - MeterGet scale 2 (W) e scale 0 (kWh) respondem com valores coerentes com a carga.
  *  - Os parametros 80, 90, 91, 92, 101, 102, 111 e 112 sao aceitos e voltam com o valor gravado.
  *  - Energia (kWh): o reporte automatico respeita o intervalo do parametro 112.
@@ -28,6 +29,9 @@
  *  Os numeros de parametro seguem a familia Aeon "Micro"; nao foram confirmados no manual do modelo.
  *
  *  Changelog:
+ *  v1.0.1 (2026-11-02) - RNG
+ *    - Log Level padrao passa de warn para info, para a leitura de volta dos parametros (ConfigurationReport)
+ *      e as linhas "was turned on/off" aparecerem sem precisar mexer nas preferencias
  *  v1.0.0 (2026-11-02) - RNG
  *    - Primeira versao: Switch, SwitchLevel, PowerMeter, EnergyMeter, Refresh, Configuration
  *    - Configure grava a associacao com o hub e os parametros de reporte, e le cada um de volta
@@ -37,9 +41,9 @@
 
 import groovy.transform.Field
 
-@Field String VERSION = "1.0.0"
+@Field String VERSION = "1.0.1"
 @Field List<String> LOG_LEVELS = ["error", "warn", "info", "debug", "trace"]
-@Field String DEFAULT_LOG_LEVEL = LOG_LEVELS[1]
+@Field String DEFAULT_LOG_LEVEL = LOG_LEVELS[2]
 
 metadata {
   definition (name: "Aeon Micro Dimmer with Power Meter", namespace: "rng", author: "Ricardo Nogueira Garcia",

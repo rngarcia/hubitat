@@ -15,14 +15,16 @@ The device advertises the Z-Wave Meter command class (0x32) and answers meter re
 
 ## Tested on
 
-One unit, identified in Hubitat as `Aeon Micro Dimmer`: Z-Wave manufacturer `0x0086`, device type `0x0003`, device id `0x0013`, in-clusters `0x26 0x32 0x27 0x2C 0x2B 0x70 0x85 0x72 0x86`. Load: a ~23 W lamp.
+Two units with the same identification, shown in Hubitat as `Aeon Micro Dimmer`: Z-Wave manufacturer `0x0086`, device type `0x0003`, device id `0x0013`, in-clusters `0x26 0x32 0x27 0x2C 0x2B 0x70 0x85 0x72 0x86`. Loads: a ~23 W light on the first unit and a ~6.5 W load on the second. Most of the testing was done on the first one.
 
-Verified on that unit:
+Verified:
 
-- Power and energy readings match the load (about 23 W, and kWh grows as expected).
-- Parameters 80, 90, 91, 92, 101, 102, 111 and 112 are accepted and read back with the stored value.
-- Energy reports arrive every 900 s, matching parameter 112.
-- With parameter 80 = 2, switching the light at the wall updates `switch` in Hubitat.
+- Power and energy readings match the load (about 23 W on the first unit and 6.5 W on the second; kWh grows as expected).
+- Parameters 80, 90, 91, 92, 101, 102, 111 and 112 are accepted and read back with the stored value, on both units.
+- Saving the preferences re-applies the configuration (both units).
+- Energy reports arrive every 900 s, matching parameter 112 (first unit).
+- With parameter 80 = 2, switching the light at the wall updates `switch` in Hubitat (first unit).
+- Switch and level changes are logged as "was turned on/off" and "level is N%".
 
 Not verified:
 
@@ -38,12 +40,13 @@ Not verified:
 
 **Manual:** Drivers Code → New Driver → Import, paste `https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-micro-dimmer-power-meter/aeon-micro-dimmer-power-meter.groovy` and Save. Later updates use the same **Import** button.
 
-Then, on the device page, set **Type** to `Aeon Micro Dimmer with Power Meter` and Save Device, press **Configure**, and check the log for the parameter read-back lines. The Z-Wave pairing is kept when you switch the driver.
+Then, on the device page, set **Type** to `Aeon Micro Dimmer with Power Meter` and Save Device, press **Configure**, and check the log for the parameter read-back lines (they are logged at `info`, which is the default **Log Level**; if you lowered it to `warn` or `error` you will not see them). The Z-Wave pairing is kept when you switch the driver.
 
 ## Preferences
 
 | Preference | Parameter | Default | Notes |
 |---|---|---|---|
+| Log Level | none (driver) | info | `debug` also logs every poll and meter report |
 | Poll power every N minutes | none (driver) | 1 | 0 turns polling off |
 | Report wall switch changes | 80 | on (Basic Report) | off sends nothing |
 | Report power when it changes by at least (W) | 91 | 2 | |

@@ -96,6 +96,18 @@
       ]
     },
     {
+      "id": "d2e8e3e1-8090-49da-9e03-b2c6550c970c",
+      "name": "Aeon Micro Dimmer with Power Meter",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-micro-dimmer-power-meter/packageManifest.json",
+      "description": "Z-Wave driver for the Aeon Micro Dimmer: dimming plus power (W) and energy (kWh) readings that the built-in driver does not expose.",
+      "tags": [
+        "Z-Wave",
+        "Lighting",
+        "Energy Monitoring"
+      ]
+    },
+    {
       "id": "625fbf28-8a56-4fb6-9d7f-4ef0cc32a795",
       "name": "Aeon Multisensor Gen5",
       "category": "Integrations",

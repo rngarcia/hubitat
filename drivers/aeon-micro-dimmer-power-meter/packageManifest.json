@@ -1,0 +1,31 @@
+{
+  "packageName": "Aeon Micro Dimmer with Power Meter",
+  "author": "Ricardo Nogueira Garcia",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-11-02",
+  "category": "Integrations",
+  "tags": [
+    "Z-Wave",
+    "Lighting",
+    "Energy Monitoring"
+  ],
+  "releaseNotes": "v1.0.0: first release. Exposes power (W) and energy (kWh) from the Aeon Micro Dimmer, which the built-in driver ignores. Energy comes from the device's automatic reports; power is polled (default every minute) because the device's automatic power reports are irregular. Configure sets the hub association and the report parameters and reads each one back. Wall switch changes are reported to the hub (parameter 80).",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/aeon-micro-dimmer-power-meter#readme",
+  "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
+  "drivers": [
+    {
+      "id": "c162e257-1e0b-41b9-92df-1a0f98a74212",
+      "name": "Aeon Micro Dimmer with Power Meter",
+      "namespace": "rng",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-micro-dimmer-power-meter/aeon-micro-dimmer-power-meter.groovy",
+      "required": true
+    }
+  ],
+  "x-catalog": {
+    "theme": "Iluminação e tomadas",
+    "order": 2,
+    "description": "Z-Wave driver for the Aeon Micro Dimmer: dimming plus power (W) and energy (kWh) readings that the built-in driver does not expose.",
+    "packageId": "d2e8e3e1-8090-49da-9e03-b2c6550c970c"
+  }
+}

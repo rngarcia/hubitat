@@ -44,7 +44,7 @@ To install straight from this repository, use **Install → From a URL** with th
 ### Sensores
 | Package | Version | Drivers | Manifest |
 |---|---|---|---|
-| [Aeon Multisensor Gen5](drivers/aeon-multisensor-gen5) | 1.1.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-multisensor-gen5/packageManifest.json) |
+| [Aeon Multisensor Gen5](drivers/aeon-multisensor-gen5) | 1.2.0 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-multisensor-gen5/packageManifest.json) |
 
 ### Segurança
 | Package | Version | Drivers | Manifest |

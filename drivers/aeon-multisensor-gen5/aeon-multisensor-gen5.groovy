@@ -1,11 +1,15 @@
 /**
  *  Aeon Multisensor Gen5 — Hubitat Driver
- *  Versão: 1.1.1 — Build: 2026-10-21
+ *  Versão: 1.2.0 — Build: 2026-11-06
  *  Autor original: keltymd
  *  Modificado por: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *
  *  Changelog:
+ *  v1.2.0 (2026-11-06) - RNG
+ *    - Novo preference "Log Level" (error/warn/info/debug/trace, padrao info): agora da para desligar o debug
+ *    - Debug/trace voltam sozinhos para info apos 30 minutos
+ *    - O log de cada frame Z-Wave ("Parsed ...") so aparece em debug
  *  v1.1.1 (2026-10-21) - RNG
  *    - Publicado em rngarcia/hubitat: cabeçalho padronizado, namespace "rng" e importUrl
  *  (histórico anterior no bloco de comentário abaixo)
@@ -43,6 +47,11 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
+import groovy.transform.Field
+
+@Field List<String> LOG_LEVELS = ["error", "warn", "info", "debug", "trace"]
+@Field String DEFAULT_LOG_LEVEL = LOG_LEVELS[2]
+
 metadata {
 	definition (name: "Aeon Multisensor Gen5", namespace: "rng", author: "keltymd; Ricardo Nogueira Garcia",
         importUrl: "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/aeon-multisensor-gen5/aeon-multisensor-gen5.groovy"
@@ -58,6 +67,10 @@ metadata {
 
 		fingerprint deviceId: "0x0701", inClusters: "0x5E,0x86,0x72,0x59,0x85,0x73,0x71,0x84,0x80,0x30,0x31,0x70,0x98,0x7A", outClusters:"0x5A"
 		fingerprint mfr:"0086", prod:"0102", model:"004A", deviceJoinName: "Aeotec MultiSensor (Gen 5)"
+	}
+
+	preferences {
+		input name: "logLevel", title: "Log Level (debug/trace voltam para info em 30 min)", type: "enum", options: LOG_LEVELS, defaultValue: DEFAULT_LOG_LEVEL, required: false
 	}
 
 	simulator {
@@ -140,6 +153,18 @@ def installed(){
 def updated(){
 // Device-Watch simply pings if no device events received for ~122min (checkInterval)
 	sendEvent(name: "checkInterval", value: 2 * 60 * 60 + 2 * 60, displayed: false, data: [protocol: "zwave", hubHardwareId: device.hub.hardwareID])
+	if (logLevel in ["debug", "trace"]) runIn(1800, "logsOff")
+}
+
+def logsOff() {
+	logger("warn", "Log level voltou para info")
+	device.updateSetting("logLevel", [value: DEFAULT_LOG_LEVEL, type: "enum"])
+}
+
+private logger(String level, String msg) {
+	int cur = LOG_LEVELS.indexOf((settings?.logLevel ?: DEFAULT_LOG_LEVEL) as String)
+	if (cur < 0) cur = 2
+	if (LOG_LEVELS.indexOf(level) <= cur) log."${level}"(msg)
 }
 
 def parse(String description)
@@ -153,7 +178,7 @@ def parse(String description)
 			result = zwaveEvent(cmd)
 		}
 	}
-	log.debug "Parsed '${description}' to ${result.inspect()}"
+	logger("debug", "Parsed '${description}' to ${result.inspect()}")
 	return result
 }
 
@@ -163,7 +188,7 @@ def zwaveEvent(hubitat.zwave.commands.wakeupv1.WakeUpNotification cmd)
 
 	if (!isConfigured()) {
 		// we're still in the process of configuring a newly joined device
-		log.debug("not sending wakeUpNoMoreInformation yet: late configure")
+		logger("debug", "not sending wakeUpNoMoreInformation yet: late configure")
 		result += response(configure())
 	} else {
 		result += response(zwave.wakeUpV1.wakeUpNoMoreInformation())
@@ -177,7 +202,7 @@ def zwaveEvent(hubitat.zwave.commands.securityv1.SecurityMessageEncapsulation cm
 	if (encapsulatedCommand) {
 		zwaveEvent(encapsulatedCommand)
 	} else {
-		log.warn "Unable to extract encapsulated cmd from $cmd"
+		logger("warn", "Unable to extract encapsulated cmd from $cmd")
 		createEvent(descriptionText: cmd.toString())
 	}
 }
@@ -221,7 +246,7 @@ def zwaveEvent(hubitat.zwave.commands.sensormultilevelv5.SensorMultilevelReport 
 	createEvent(map)
 }
 def zwaveEvent(hubitat.zwave.commands.sensorbinaryv1.SensorBinaryReport cmd) {
-	log.trace "SensorBinaryReport: $cmd"
+	logger("trace", "SensorBinaryReport: $cmd")
 	createEvent(name:"motion", value:cmd.sensorValue ? "active" : "inactive")
 }
 

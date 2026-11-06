@@ -1,15 +1,15 @@
 {
   "packageName": "Roomba (Rest980)",
   "author": "Ricardo Nogueira Garcia",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "minimumHEVersion": "2.3.0",
-  "dateReleased": "2026-10-21",
+  "dateReleased": "2026-11-06",
   "category": "Integrations",
   "tags": [
     "LAN",
     "Appliances"
   ],
-  "releaseNotes": "v1.0.1: first release in the rngarcia/hubitat monorepo.",
+  "releaseNotes": "v1.1.0: fixes invalid cron for polling >= 60 s, async HTTP, events only on change, backoff after failures, debug off by default.",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/roomba-rest980#readme",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [

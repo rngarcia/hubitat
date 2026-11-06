@@ -55,7 +55,7 @@ To install straight from this repository, use **Install → From a URL** with th
 ### Eletrodomésticos
 | Package | Version | Drivers | Manifest |
 |---|---|---|---|
-| [Roomba (Rest980)](drivers/roomba-rest980) | 1.0.1 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/roomba-rest980/packageManifest.json) |
+| [Roomba (Rest980)](drivers/roomba-rest980) | 1.1.0 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/roomba-rest980/packageManifest.json) |
 
 ### Integrações cloud
 | Package | Version | Drivers | Manifest |

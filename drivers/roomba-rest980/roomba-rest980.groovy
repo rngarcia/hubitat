@@ -1,11 +1,19 @@
 /**
  *  Roomba (Rest980 Standalone) — Hubitat Driver
- *  Versão: 1.0.1 — Build: 2026-10-21
+ *  Versão: 1.1.0 — Build: 2026-11-04
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
  *
  *  Changelog:
+ *  v1.1.0 (2026-11-04) - RNG
+ *    - Corrige o agendamento: intervalos de 60 s ou mais geravam uma expressao cron invalida (incremento > 59);
+ *      agora usa minutos a partir de 60 s (padrao 60 s)
+ *    - Consulta ao rest980 assincrona (asynchttpGet): nao prende mais o hub ate 10 s por chamada
+ *    - Eventos so quando o valor muda (antes, switch e lastActivity eram isStateChange a cada consulta e o
+ *      refresh enviava cerca de 13 eventos por chamada); lastActivity passa a marcar a ultima mudanca de status
+ *    - Backoff depois de 3 falhas seguidas (ate 15 min) e aviso no log so na 1a falha e a cada 10
+ *    - updated()/initialize() nao fazem mais a consulta de forma sincrona; debug desligado por padrao
  *  v1.0.1 (2026-10-21) - RNG
  *    - Publicado em rngarcia/hubitat: cabeçalho padronizado, namespace "rng" e importUrl
  *    - Autor ajustado (desenvolvido com assistência de IA); conceitos do driver Roomba de Aaron Ward
@@ -58,8 +66,8 @@ metadata {
     preferences {
         input "restIP", "text", title: "Rest980 Server IP", required: true
         input "restPort", "number", title: "Rest980 Server Port", required: true, defaultValue: 3000
-        input "pollSeconds", "number", title: "Polling interval (seconds)", required: true, defaultValue: 30, range: "5..600"
-        input "logEnable", "bool", title: "Enable debug logging", required: true, defaultValue: true
+        input "pollSeconds", "number", title: "Polling interval (seconds, 5 to 3600)", required: true, defaultValue: 60, range: "5..3600"
+        input "logEnable", "bool", title: "Enable debug logging (turns off after 30 min)", required: true, defaultValue: false
         input "infoEnable", "bool", title: "Enable info logging", required: true, defaultValue: true
     }
 }
@@ -84,13 +92,24 @@ def initialize() {
     state.batteryZeroStartMs = state.batteryZeroStartMs ?: 0L
     state.lastSeenMs = state.lastSeenMs ?: 0L
     state.lastStatus = state.lastStatus ?: "idle"
+    state.failCount = 0
 
-    // immediate refresh
-    refresh()
+    // first refresh shortly after, outside of installed()/updated()
+    runIn(2, "refresh")
+    schedulePolling()
+}
 
-    // periodic refresh
-    def s = safeInt(pollSeconds, 30)
-    schedule("0/${s} * * * * ?", "refresh")
+private void schedulePolling() {
+    Integer s = Math.max(5, Math.min(3600, safeInt(pollSeconds, 60)))
+    if (s < 60) {
+        // Quartz: seconds field accepts increments up to 59
+        schedule("0/${s} * * * * ?", "poll")
+        if (infoEnable) log.info "${device.displayName} polling every ${s} s"
+    } else {
+        Integer m = Math.min(59, Math.max(1, Math.round(s / 60.0) as Integer))
+        schedule("0 0/${m} * * * ?", "poll")
+        if (infoEnable) log.info "${device.displayName} polling every ${m} min"
+    }
 }
 
 def logsOff() {
@@ -126,15 +145,65 @@ def setAlwaysFinish(String mode) {
     action("/api/local/config/alwaysFinish/${mode}", false)
 }
 
+// Scheduled entry point: applies backoff after repeated failures, then refreshes
+def poll() {
+    Integer fails = safeInt(state.failCount, 0)
+    if (fails >= 3) {
+        Long wait = Math.min(fails * 60000L, 900000L)
+        if (now() - (state.lastTryMs ?: 0L) < wait) {
+            if (logEnable) log.debug "Rest980 backoff (${fails} failures), skipping poll"
+            return
+        }
+    }
+    refresh()
+}
+
 def refresh() {
-    def resp = executeAction("/api/local/info/state")
-    if (!resp?.data) return
+    if (!restIP || !restPort) {
+        log.warn "Rest980 settings missing (restIP/restPort)"
+        return
+    }
+    state.lastTryMs = now()
+    try {
+        asynchttpGet("handleState", [
+            uri: "http://${restIP}:${restPort}",
+            path: "/api/local/info/state",
+            contentType: "application/json",
+            timeout: 10
+        ])
+    } catch (e) {
+        pollFailed("${e}")
+    }
+}
 
+def handleState(resp, data) {
+    if (resp.hasError() || resp.status != 200) {
+        pollFailed(resp.hasError() ? resp.getErrorMessage() : "HTTP ${resp.status}")
+        return
+    }
+    def json = null
+    try {
+        json = resp.json
+    } catch (e) {
+        try { json = new JsonSlurper().parseText(resp.data) } catch (e2) { json = null }
+    }
+    if (!(json instanceof Map)) {
+        pollFailed("unexpected response")
+        return
+    }
+    if (safeInt(state.failCount, 0) > 0 && infoEnable) log.info "${device.displayName}: Rest980 reachable again"
+    state.failCount = 0
     state.lastSeenMs = now()
+    processState(json)
+}
 
-    // Rest980 usually returns parsed JSON already as resp.data
-    def data = resp.data
+private void pollFailed(String why) {
+    Integer n = safeInt(state.failCount, 0) + 1
+    state.failCount = n
+    if (n == 1 || n % 10 == 0) log.warn "${device.displayName}: Rest980 poll failed (${why}), consecutive failures: ${n}"
+}
 
+private void processState(def data) {
     // Basic identity
     safeSend("robotName", data?.name?.toString())
     safeSend("robotSku", data?.sku?.toString())
@@ -142,11 +211,11 @@ def refresh() {
 
     // Battery
     def bat = safeInt(data?.batPct, null)
-    if (bat != null) sendEvent(name: "battery", value: bat, unit: "%")
+    if (bat != null) sendIfChanged("battery", bat, "%")
 
     // Mission
     def mssnM = safeInt(data?.cleanMissionStatus?.mssnM, 0)
-    sendEvent(name: "missionMinutes", value: mssnM)
+    sendIfChanged("missionMinutes", mssnM)
 
     // Bin/Tank
     updateBinTank(data)
@@ -159,17 +228,14 @@ def refresh() {
     safeSend("notReadyCode", notReady ?: "")
 
     def status = computeStatus(phase, notReady, bat, mssnM)
+    boolean statusChanged = device.currentValue("cleanStatus")?.toString() != status
     safeSend("cleanStatus", status)
 
     // Switch state
-    if (status == "cleaning") {
-        sendEvent(name: "switch", value: "on", isStateChange: true)
-    } else {
-        sendEvent(name: "switch", value: "off", isStateChange: true)
-    }
+    sendIfChanged("switch", status == "cleaning" ? "on" : "off")
 
-    // Last activity (any successful refresh updates)
-    sendEvent(name: "lastActivity", value: fmtNow(), isStateChange: true)
+    // Last activity: time of the last status change
+    if (statusChanged) sendEvent(name: "lastActivity", value: fmtNow())
 
     // Tile
     roombaTile(status, bat ?: 0, mssnM)
@@ -348,7 +414,7 @@ private void roombaTile(String cleaning, Integer batterylevel, Integer cleaningT
     else html += "${msg}<br>Battery: ${batterylevel}%"
     html += "</font></center>"
 
-    sendEvent(name: "RoombaTile", value: html, displayed: true)
+    sendIfChanged("RoombaTile", html)
     if (logEnable) log.debug "RoombaTile updated: ${msg}"
 }
 
@@ -356,7 +422,16 @@ private void roombaTile(String cleaning, Integer batterylevel, Integer cleaningT
 
 private void safeSend(String attr, def val) {
     if (val == null) return
-    sendEvent(name: attr, value: val.toString())
+    sendIfChanged(attr, val.toString())
+}
+
+// Only sends the event when the value is different from the current one
+private void sendIfChanged(String name, def value, String unit = null) {
+    if (value == null) return
+    if (device.currentValue(name)?.toString() == value.toString()) return
+    Map evt = [name: name, value: value]
+    if (unit) evt.unit = unit
+    sendEvent(evt)
 }
 
 private Integer safeInt(def v, Integer fallback) {

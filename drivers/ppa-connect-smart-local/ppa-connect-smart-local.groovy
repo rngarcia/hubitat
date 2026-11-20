@@ -632,6 +632,14 @@ private void processDps(Map dps) {
     if (dps.containsKey(DP_DOOR_STATE) || dps.containsKey(DP_CONTACT)) publishDoor()
 }
 
+/** Chave de sessão: XOR dos nonces cifrado com a Local Key (ECB no 3.4, GCM no 3.5). */
+static byte[] sessionKey(String v, byte[] realKey, byte[] localNonce, byte[] remoteNonce) {
+    byte[] x = new byte[16]
+    for (int i = 0; i < 16; i++) x[i] = (byte) (localNonce[i] ^ remoteNonce[i])
+    if (v == "34") return aesEcb(realKey, x, true, false)
+    return (byte[]) gcmCrypt(realKey, slice(localNonce, 0, 12), x, new byte[0], true)[0]
+}
+
 /** O DP 10 tem prioridade. Sem ele, usa o DP 3 (true = aberta). */
 private void publishDoor() {
     Map s = session()

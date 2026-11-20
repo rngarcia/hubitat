@@ -8,7 +8,7 @@ Local driver (port 6668, protocols 3.3, 3.4 and 3.5, no Tuya Cloud) for the PPA 
 
 | Device | Protocol | Status |
 |---|---|---|
-| PPA Connect Smart on a PPA Agility controller (skylight) | 3.4 | Data points confirmed on a real device; driver **not yet validated** on a Hubitat hub |
+| PPA Connect Smart on a PPA Agility controller (skylight) | 3.4 | Working on a real device (state and inversion confirmed on a Hubitat hub) |
 
 Data points used: 1 (`switch_1`, the pulse), 2 (`countdown_1`), 3 (`doorcontact_state`), 4 (`tr_timecon`, travel time 30–120 s), 5 (`countdown_alarm`) and 10 (`door_sensor_state`: opened, closed, opening, closing). DP 10 takes priority; DP 3 is used when DP 10 is missing.
 

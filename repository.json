@@ -173,6 +173,17 @@
         "Cloud",
         "Tools & Utilities"
       ]
+    },
+    {
+      "id": "fb602a23-7b96-4d84-90b0-118a1213b03a",
+      "name": "PPA Connect Smart (Tuya Garage Door) Local",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/ppa-connect-smart-local/packageManifest.json",
+      "description": "Local driver for the PPA Connect Smart Wi-Fi module (Tuya garage door opener, category ckmkzq) used on skylights and gates: door state, pulse command and an invert-state option, with no Tuya Cloud.",
+      "tags": [
+        "LAN",
+        "Garage Door"
+      ]
     }
   ]
 }

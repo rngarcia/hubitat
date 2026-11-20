@@ -65,7 +65,7 @@ To install straight from this repository, use **Install → From a URL** with th
 ### Outros
 | Package | Version | Drivers | Manifest |
 |---|---|---|---|
-| [PPA Connect Smart (Tuya Garage Door) Local](drivers/ppa-connect-smart-local) | 1.0.0 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/ppa-connect-smart-local/packageManifest.json) |
+| [Tuya Garage Door Opener (Wi-Fi) Local](drivers/tuya-garage-door-local) | 1.1.0 | 1 | [packageManifest.json](https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-garage-door-local/packageManifest.json) |
 
 ### Not in HPM
 - [GiEX Irrigation Valve (sh1btabb)](drivers/giex-irrigation-valve): not maintained; use kkossev's Tuya Zigbee Valve

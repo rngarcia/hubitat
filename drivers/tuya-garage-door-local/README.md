@@ -4,7 +4,7 @@
 
 Local driver (port 6668, protocols 3.3, 3.4 and 3.5, no Tuya Cloud) for Tuya Wi-Fi garage door, gate and skylight openers (Tuya category `ckmkzq`, "Garage Door Opener"). It reports the door state, sends the open/close pulse and has one option to invert the state for modules that report it swapped.
 
-> The driver is still listed as **PPA Connect Smart (Tuya Garage Door) Local** because that was the first device it was written for. It is not specific to PPA: any `ckmkzq` opener with DP 1 (pulse) and DP 3 (contact) should work.
+> Formerly **PPA Connect Smart (Tuya Garage Door) Local** (v1.0.0). Renamed in v1.1.0 because it is not specific to PPA: any `ckmkzq` opener with DP 1 (pulse) and DP 3 (contact) should work. If you installed v1.0.0, change your devices to the new driver type (Device → Type) after updating.
 
 ## Tested with
 
@@ -43,10 +43,10 @@ Some modules report the state swapped: `closed` while the door is open. The sing
 
 ## Installation
 
-**Hubitat Package Manager:** Install → Search by Keywords, search for `Tuya Garage Door`. Or Install → From a URL with:
-`https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/ppa-connect-smart-local/packageManifest.json`
+**Hubitat Package Manager:** Install → Search by Keywords, search for `Tuya Garage Door Opener`. Or Install → From a URL with:
+`https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-garage-door-local/packageManifest.json`
 
-**Manual:** Drivers Code → New Driver → Import, paste `https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/ppa-connect-smart-local/ppa-connect-smart-local.groovy` and Save.
+**Manual:** Drivers Code → New Driver → Import, paste `https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-garage-door-local/tuya-garage-door-local.groovy` and Save.
 
 ## Notes
 

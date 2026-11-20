@@ -176,9 +176,9 @@
     },
     {
       "id": "fb602a23-7b96-4d84-90b0-118a1213b03a",
-      "name": "PPA Connect Smart (Tuya Garage Door) Local",
+      "name": "Tuya Garage Door Opener (Wi-Fi) Local",
       "category": "Integrations",
-      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/ppa-connect-smart-local/packageManifest.json",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-garage-door-local/packageManifest.json",
       "description": "Local driver (no Tuya Cloud) for Tuya Wi-Fi garage door, gate and skylight openers (category ckmkzq): door state, pulse command and an invert-state option. Tested with the PPA Connect Smart module and the Automatizador TSI (Garen).",
       "tags": [
         "LAN",

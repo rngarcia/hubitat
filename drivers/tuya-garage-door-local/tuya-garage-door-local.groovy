@@ -1,14 +1,15 @@
 /**
- *  PPA Connect Smart (Tuya Garage Door) Local — Hubitat Driver
- *  Versão: 1.0.0 — Build: 2026-11-20
+ *  Tuya Garage Door Opener (Wi-Fi) Local — Hubitat Driver
+ *  Versão: 1.1.0 — Build: 2026-11-20
  *  Autor: Ricardo Nogueira Garcia
  *  Repositório: https://github.com/rngarcia/hubitat
  *  Gostou? Buy me a beer: https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD
  *
- *  Controla pela rede local (TCP 6668, sem nuvem Tuya) o módulo Wi-Fi PPA Connect Smart
- *  (Tuya, categoria "ckmkzq", "Smart Garage Door Opener") ligado ao conector PROG de uma
- *  central PPA Agility. Foi feito para a claraboia, mas serve a qualquer automatizador PPA
- *  com esse módulo.
+ *  Controla pela rede local (TCP 6668, sem nuvem Tuya) automatizadores Wi-Fi de portão,
+ *  garagem e claraboia da Tuya (categoria "ckmkzq", "Garage Door Opener"): estado da porta,
+ *  pulso de abrir/fechar e uma opção para inverter o estado em módulos que o reportam
+ *  trocado. Testado com o módulo PPA Connect Smart (claraboia, protocolo 3.4) e com o
+ *  Automatizador TSI/Garen (portão, protocolo 3.3).
  *
  *  Pré-requisitos: IP fixo do módulo, Device ID e Local Key. A Local Key muda a cada novo
  *  pareamento com o app Tuya / Smart Life. Para descobrir ID, key e versão:
@@ -22,7 +23,8 @@
  *  Implementação do protocolo baseada no TinyTuya (Jason Cox, MIT License):
  *    https://github.com/jasonacox/tinytuya
  *
- *  DPs do módulo (lidos do diagnóstico da integração Tuya do Home Assistant):
+ *  DPs (lidos do diagnóstico da integração Tuya do Home Assistant; o DP 3 e o DP 1 são o
+ *  mínimo, os demais existem só em alguns modelos, como o PPA Connect Smart):
  *    1  switch_1          bool   comando: um pulso aciona o automatizador
  *    2  countdown_1       s      contagem regressiva do app
  *    3  doorcontact_state bool   contato da porta (no HA, true = aberta)
@@ -30,10 +32,10 @@
  *    5  countdown_alarm   s      contagem regressiva do alarme
  *    10 door_sensor_state enum   opened / closed / opening / closing / invaid
  *
- *  Estado trocado: neste módulo, na instalação da claraboia, o status chega ao contrário
- *  (vidro aberto = "closed"). A central em si está correta (o LED FRC acende com o vidro
- *  fechado). Por isso a preferência "Inverter estado" vem ligada por padrão; desligue-a se
- *  o seu módulo reportar certo. A opção é única: inverte opened↔closed e também
+ *  Estado trocado: alguns módulos reportam o status ao contrário (o PPA Connect Smart da
+ *  claraboia diz "closed" com o vidro aberto, apesar de a central estar correta). Por isso a
+ *  preferência "Inverter estado" vem ligada por padrão; desligue-a se o seu equipamento
+ *  reportar certo (é o caso do Automatizador TSI). A opção é única: inverte opened↔closed e também
  *  opening↔closing. As transições opening/closing ainda não foram validadas na prática.
  *
  *  Comandos: o módulo é um botão de pulso, sem "abrir" e "fechar" distintos. open() e
@@ -41,6 +43,10 @@
  *  que "Sempre enviar o pulso" esteja ligado). pulse() manda sempre.
  *
  *  Changelog:
+ *  v1.1.0 (2026-11-20) - RNG
+ *    - Renomeado de "PPA Connect Smart (Tuya Garage Door) Local" para "Tuya Garage Door
+ *      Opener (Wi-Fi) Local": o driver não é específico da PPA. Testado também com o
+ *      Automatizador TSI (Garen), protocolo 3.3, DPs 1 e 3 apenas.
  *  v1.0.0 (2026-11-20) - RNG
  *    - Primeira versão, derivada do Tuya Tank Level Monitor (Wi-Fi) Local v2.3.0:
  *      camada de protocolo reaproveitada, camada de aplicação nova para GarageDoorControl
@@ -57,9 +63,9 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import hubitat.helper.HexUtils
 
-@Field static final String DRIVER_VERSION = "1.0.0"
+@Field static final String DRIVER_VERSION = "1.1.0"
 
-// DPs da categoria ckmkzq (módulo PPA Connect Smart)
+// DPs da categoria ckmkzq
 @Field static final String DP_SWITCH          = "1"   // bool: pulso de acionamento
 @Field static final String DP_COUNTDOWN       = "2"   // s
 @Field static final String DP_CONTACT         = "3"   // bool: true = aberta (convenção do HA)
@@ -93,10 +99,10 @@ import hubitat.helper.HexUtils
 
 metadata {
     definition(
-        name: "PPA Connect Smart (Tuya Garage Door) Local",
+        name: "Tuya Garage Door Opener (Wi-Fi) Local",
         namespace: "rng",
         author: "Ricardo Nogueira Garcia",
-        importUrl: "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/ppa-connect-smart-local/ppa-connect-smart-local.groovy"
+        importUrl: "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-garage-door-local/tuya-garage-door-local.groovy"
     ) {
         capability "GarageDoorControl"
         capability "ContactSensor"
@@ -133,7 +139,7 @@ metadata {
               defaultValue: "300", required: true
 
         input name: "invertState", type: "bool", title: "Inverter estado",
-              description: "Troca aberto ↔ fechado (e abrindo ↔ fechando). O módulo da claraboia reporta o contrário do real. Desligue se o seu estiver certo.",
+              description: "Troca aberto ↔ fechado (e abrindo ↔ fechando). Alguns módulos (como o PPA Connect Smart) reportam o contrário do real. Desligue se o seu estiver certo.",
               defaultValue: true
         input name: "forceCommands", type: "bool", title: "Sempre enviar o pulso",
               description: "open() e close() enviam o pulso mesmo que o estado já seja o desejado",

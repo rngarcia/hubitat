@@ -1,7 +1,7 @@
 {
-  "packageName": "PPA Connect Smart (Tuya Garage Door) Local",
+  "packageName": "Tuya Garage Door Opener (Wi-Fi) Local",
   "author": "Ricardo Nogueira Garcia",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-11-20",
   "category": "Integrations",
@@ -10,15 +10,15 @@
     "Garage Door",
     "Tuya"
   ],
-  "releaseNotes": "v1.0.0: first release. Local driver (port 6668, protocols 3.3, 3.4 and 3.5, no Tuya Cloud) for the PPA Connect Smart Wi-Fi module (Tuya category ckmkzq) on PPA Agility controllers: door state from DP 10 / DP 3, single pulse command, travel time, and one Invert state option for modules that report open and closed swapped.",
-  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/ppa-connect-smart-local#readme",
+  "releaseNotes": "v1.1.0: renamed from PPA Connect Smart (Tuya Garage Door) Local; the driver is generic for Tuya ckmkzq garage door openers. Also tested with the Automatizador TSI (Garen) on protocol 3.3 (DP 1 and DP 3 only). Existing devices need to be switched to the new driver type. v1.0.0: first release (PPA Connect Smart skylight module, protocol 3.4).",
+  "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/tuya-garage-door-local#readme",
   "licenseFile": "https://raw.githubusercontent.com/rngarcia/hubitat/main/LICENSE",
   "drivers": [
     {
       "id": "656e802d-6deb-474a-bb77-93e81ccc8fc5",
-      "name": "PPA Connect Smart (Tuya Garage Door) Local",
+      "name": "Tuya Garage Door Opener (Wi-Fi) Local",
       "namespace": "rng",
-      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/ppa-connect-smart-local/ppa-connect-smart-local.groovy",
+      "location": "https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/tuya-garage-door-local/tuya-garage-door-local.groovy",
       "required": true
     }
   ],

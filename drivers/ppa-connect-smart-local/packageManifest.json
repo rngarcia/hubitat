@@ -7,7 +7,8 @@
   "category": "Integrations",
   "tags": [
     "LAN",
-    "Garage Door"
+    "Garage Door",
+    "Tuya"
   ],
   "releaseNotes": "v1.0.0: first release. Local driver (port 6668, protocols 3.3, 3.4 and 3.5, no Tuya Cloud) for the PPA Connect Smart Wi-Fi module (Tuya category ckmkzq) on PPA Agility controllers: door state from DP 10 / DP 3, single pulse command, travel time, and one Invert state option for modules that report open and closed swapped.",
   "documentationLink": "https://github.com/rngarcia/hubitat/tree/main/drivers/ppa-connect-smart-local#readme",
@@ -24,7 +25,7 @@
   "x-catalog": {
     "theme": "Outros",
     "order": 1,
-    "description": "Local driver for the PPA Connect Smart Wi-Fi module (Tuya garage door opener, category ckmkzq) used on skylights and gates: door state, pulse command and an invert-state option, with no Tuya Cloud.",
+    "description": "Local driver (no Tuya Cloud) for Tuya Wi-Fi garage door, gate and skylight openers (category ckmkzq): door state, pulse command and an invert-state option. Tested with the PPA Connect Smart module and the Automatizador TSI (Garen).",
     "packageId": "fb602a23-7b96-4d84-90b0-118a1213b03a"
   }
 }

@@ -1,37 +1,49 @@
-# PPA Connect Smart (Tuya Garage Door) Local — Hubitat driver
+# Tuya Garage Door Opener (Wi-Fi) Local — Hubitat driver
 
 [![Buy me a beer](https://img.shields.io/badge/Buy%20me%20a%20beer-PayPal-f5a623?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=rngarcia%40gmail.com&currency_code=USD)
 
-Local driver (port 6668, protocols 3.3, 3.4 and 3.5, no Tuya Cloud) for the PPA Connect Smart Wi-Fi module, a Tuya garage door opener (category `ckmkzq`, product ID `acuik4cpfk85ngao`) that plugs into the PROG connector of PPA Agility controllers. Built for a skylight, it works for any door or gate driven by that module.
+Local driver (port 6668, protocols 3.3, 3.4 and 3.5, no Tuya Cloud) for Tuya Wi-Fi garage door, gate and skylight openers (Tuya category `ckmkzq`, "Garage Door Opener"). It reports the door state, sends the open/close pulse and has one option to invert the state for modules that report it swapped.
+
+> The driver is still listed as **PPA Connect Smart (Tuya Garage Door) Local** because that was the first device it was written for. It is not specific to PPA: any `ckmkzq` opener with DP 1 (pulse) and DP 3 (contact) should work.
 
 ## Tested with
 
 | Device | Protocol | Status |
 |---|---|---|
-| PPA Connect Smart on a PPA Agility controller (skylight) | 3.4 | Working on a real device (state and inversion confirmed on a Hubitat hub) |
-| Automatizador TSI (Garen) gate opener, product ID `ceej8bhafaak8chw` | 3.3 | Working on a real device (state from DP 3; turn **Inverter estado** off) |
+| PPA Connect Smart module on a PPA Agility controller (skylight), product ID `acuik4cpfk85ngao` | 3.4 | Working on a real device (state and inversion confirmed on a Hubitat hub); reports the state swapped, so **Inverter estado** stays on |
+| Automatizador TSI (Garen) gate opener, product ID `ceej8bhafaak8chw` | 3.3 | Working on a real device (state from DP 3); **Inverter estado** off |
 
-Any other Tuya `ckmkzq` garage door opener that exposes DP 1 (pulse) and DP 3 (contact) should work the same way; pick the protocol version your device reports in the TinyTuya scan.
+Pick the protocol version your device reports in the TinyTuya scan.
 
-Data points used: 1 (`switch_1`, the pulse), 2 (`countdown_1`), 3 (`doorcontact_state`), 4 (`tr_timecon`, travel time 30–120 s), 5 (`countdown_alarm`) and 10 (`door_sensor_state`: opened, closed, opening, closing). DP 10 takes priority; DP 3 is used when DP 10 is missing.
+## Data points
+
+| DP | Code | Use |
+|---|---|---|
+| 1 | `switch_1` | The pulse (open/close toggle) |
+| 3 | `doorcontact_state` | Contact: `true` = open on most devices |
+| 10 | `door_sensor_state` | opened / closed / opening / closing, when the device has it (takes priority over DP 3) |
+| 2, 5 | `countdown_1`, `countdown_alarm` | Countdowns, when present |
+| 4 | `tr_timecon` | Travel time, 30–120 s, when present |
+
+Devices with only DP 1 and DP 3 report just open and closed; there is no `opening`/`closing`, and the travel-time and countdown attributes stay empty.
 
 ## Commands
 
-The module is a single-pulse (toggle) input, so there are no separate open and close commands on the device. `pulse()` always sends the pulse. `open()` and `close()` send it only when the current state is not already the target, unless **Always send the pulse** is on. `setTravelTime` accepts 30–120 s.
+Most of these openers are a single-pulse (toggle) input, so there are no separate open and close commands on the device. `pulse()` always sends the pulse. `open()` and `close()` send it only when the current state is not already the target, unless **Always send the pulse** is on. `setTravelTime` accepts 30–120 s and only applies to devices with DP 4.
 
 ## Invert state
 
-The module on the author's skylight reports the state swapped: `closed` while the glass is open (the controller's own LEDs are correct). The single preference **Inverter estado** (on by default) swaps `opened`/`closed` and also `opening`/`closing`. Turn it off if your module reports correctly. The `opening`/`closing` mapping has not been validated yet.
+Some modules report the state swapped: `closed` while the door is open. The single preference **Inverter estado** swaps `opened`/`closed` and also `opening`/`closing`. It is **on by default** because the first device needed it; turn it off if your device reports correctly. The `opening`/`closing` mapping has not been validated on a moving door yet.
 
 ## Requirements
 
 - A fixed IP for the module (DHCP reservation on your router).
 - The device ID, local key and protocol version. Get them with [TinyTuya](https://github.com/jasonacox/tinytuya): `python -m tinytuya wizard`. Pair the module in the Tuya / Smart Life app first; the local key changes every time it is re-paired.
-- Close other local Tuya clients while this driver keeps its connection open.
+- Most of these modules accept one local connection at a time, so close other local Tuya clients while this driver keeps its connection open. Home Assistant's Tuya integration uses the cloud and does not conflict.
 
 ## Installation
 
-**Hubitat Package Manager:** Install → Search by Keywords, search for `PPA Connect Smart`. Or Install → From a URL with:
+**Hubitat Package Manager:** Install → Search by Keywords, search for `Tuya Garage Door`. Or Install → From a URL with:
 `https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/ppa-connect-smart-local/packageManifest.json`
 
 **Manual:** Drivers Code → New Driver → Import, paste `https://raw.githubusercontent.com/rngarcia/hubitat/main/drivers/ppa-connect-smart-local/ppa-connect-smart-local.groovy` and Save.

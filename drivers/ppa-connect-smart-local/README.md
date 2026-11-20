@@ -9,6 +9,9 @@ Local driver (port 6668, protocols 3.3, 3.4 and 3.5, no Tuya Cloud) for the PPA 
 | Device | Protocol | Status |
 |---|---|---|
 | PPA Connect Smart on a PPA Agility controller (skylight) | 3.4 | Working on a real device (state and inversion confirmed on a Hubitat hub) |
+| Automatizador TSI (Garen) gate opener, product ID `ceej8bhafaak8chw` | 3.3 | Working on a real device (state from DP 3; turn **Inverter estado** off) |
+
+Any other Tuya `ckmkzq` garage door opener that exposes DP 1 (pulse) and DP 3 (contact) should work the same way; pick the protocol version your device reports in the TinyTuya scan.
 
 Data points used: 1 (`switch_1`, the pulse), 2 (`countdown_1`), 3 (`doorcontact_state`), 4 (`tr_timecon`, travel time 30–120 s), 5 (`countdown_alarm`) and 10 (`door_sensor_state`: opened, closed, opening, closing). DP 10 takes priority; DP 3 is used when DP 10 is missing.
 
